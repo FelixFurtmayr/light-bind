@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Counter Example</title>
+</head>
+
+<body>
+   <div bind-function="TableComponent">
+      <h3>{{title}}</h3>
+      <table class="data-table">
+         <thead>
+            <tr>
+               <th bind-repeat="col in columns">{{col.name}}</th>
+            </tr>
+         </thead>
+         <tbody>
+            <tr bind-repeat="row in rows" bind-class="'row-' + ($index % 2 === 0 ? 'even' : 'odd')">
+               <td bind-repeat="(key, value) in row">{{value}}</td>
+            </tr>
+         </tbody>
+      </table>
+   </div>
+   <script>
+      function TableComponent(data) {
+         data.title = 'Simple Data Table';
+         data.columns = [
+            { name: 'Name' },
+            { name: 'Age' },
+            { name: 'Country' }
+         ];
+         data.rows = [
+            { name: 'John Doe', age: 30, country: 'USA' },
+            { name: 'Jane Smith', age: 25, country: 'UK' },
+            { name: 'Sam Brown', age: 22, country: 'Canada' }
+         ];
+      }
+   </script>
+</body>
+
+</html>

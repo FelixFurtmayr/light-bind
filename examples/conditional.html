@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Conditional Rendering</title>
+</head>
+
+<body>
+   <div bind-function="ConditionalComponent">
+      <label><input type="checkbox" bind="toggleVisible"> Toggle visibility</label>
+      <div bind-if="toggleVisible">
+         <p>This content is conditionally displayed</p>
+         <p>The current time is: {{currentTime}}</p>
+      </div>
+      <div bind-if="!toggleVisible">
+         <p>Alternative content when main content is hidden</p>
+      </div>
+      <div>
+         <p>Show content based on count:</p>
+         <div bind-if="count < 3">Count is less than 3: {{count}}</div>
+         <div bind-if="count >= 3 && count < 6">Count is between 3 and 5: {{count}}</div>
+         <div bind-if="count >= 6">
+            Count is 6 or greater: {{count}}
+            <div bind-if="count >= 7">larger 7</div>
+         </div>
+      </div>
+   </div>
+   <script>
+      function ConditionalComponent(data) {
+         data.toggleVisible = true;
+         data.count = 0;
+         data.currentTime = new Date().toLocaleTimeString();
+
+         // Update time and count every second
+         // setInterval(() => {
+         setTimeout(() => {
+            data.currentTime = new Date().toLocaleTimeString();
+            data.count++;
+            data.$render();
+         }, 1000);
+      }
+   </script>
+</body>
+
+</html>

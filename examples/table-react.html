@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>React Table Example</title>
+   <!-- Load React -->
+   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+   <!-- Load Babel for JSX transpilation -->
+   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+   <style>
+      .row-even {
+         background-color: #f2f2f2;
+      }
+
+      .row-odd {
+         background-color: #ffffff;
+      }
+
+      .data-table {
+         width: 100%;
+         border-collapse: collapse;
+      }
+
+      .data-table th,
+      .data-table td {
+         padding: 8px;
+         border: 1px solid #ddd;
+      }
+   </style>
+</head>
+
+<body>
+   <div id="root"></div>
+
+   <script type="text/babel">
+      function TableComponent() {
+         const [tableData, setTableData] = React.useState({
+            title: 'Simple Data Table',
+            columns: [
+               { name: 'Name' },
+               { name: 'Age' },
+               { name: 'Country' }
+            ],
+            rows: [
+               { name: 'John Doe', age: 30, country: 'USA' },
+               { name: 'Jane Smith', age: 25, country: 'UK' },
+               { name: 'Sam Brown', age: 22, country: 'Canada' }
+            ]
+         });
+
+         React.useEffect(() => {
+            console.time('Generating rows');
+            // Generate additional 10000 rows
+            const additionalRows = [];
+            for (let i = 0; i < 10000; i++) {
+               additionalRows.push({
+                  name: 'Name ' + i,
+                  age: Math.floor(Math.random() * 100),
+                  country: 'Country ' + i
+               });
+            }
+
+            setTableData(prevData => ({
+               ...prevData,
+               rows: [...prevData.rows, ...additionalRows]
+            }));
+            console.timeEnd('Generating rows');
+         }, []); // Empty dependency array ensures this runs only once on mount
+
+         return (
+            <div>
+               <h3>{tableData.title}</h3>
+               <table className="data-table">
+                  <thead>
+                     <tr>
+                        {tableData.columns.map((col, index) => (
+                           <th key={index}>{col.name}</th>
+                        ))}
+                     </tr>
+                  </thead>
+                  <tbody>
+                     {tableData.rows.map((row, rowIndex) => (
+                        <tr
+                           key={rowIndex}
+                           className={`row-${rowIndex % 2 === 0 ? 'even' : 'odd'}`}
+                        >
+                           {Object.entries(row).map(([key, value], colIndex) => (
+                              <td key={colIndex}>
+                                 {colIndex === 2 ? (
+                                    <div>Ade 12323 {key}</div>
+                                 ) : (
+                                    <div>{value}</div>
+                                 )}
+                              </td>
+                           ))}
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            </div>
+         );
+      }
+
+      // Render the App
+      ReactDOM.render(
+         <TableComponent />,
+         document.getElementById('root')
+      );
+   </script>
+</body>
+
+</html>

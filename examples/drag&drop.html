@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Drag & Drop, Dialog, Notes</title>
+</head>
+
+<body>
+   <div bind-function="dragDropDemo">
+      <div class="item" bind-drag="item" index="$index" bind-repeat="item in items">
+         {{ item.name }}
+      </div>
+      <div class="drop-zone" bind-drop="onDrop" drop-data="targetZone">
+         Drop items here
+      </div>
+      <div bind-repeat="drop in dropped">{{drop}}</div>
+      <br>
+      <br>
+      <button on-click="openDialog()">Open Dialog</button>
+   </div>
+   <script>
+      function dragDropDemo(scope) {
+         scope.items = [
+            { id: 1, name: "Item 1" },
+            { id: 2, name: "Item 2" }
+         ];
+         scope.targetZone = "main";
+         scope.dropped = [];
+         scope.onDrop = function (data) {
+            console.log("Item dropped:", data);
+            scope.dropped.push(data);
+         };
+         scope.openDialog = function () {
+            console.log("Opening dialog...", dialog);
+            dialog.open('confirm', function (result) {
+               notification.success('It works! This is so great :-)');
+            });
+         };
+      }
+   </script>
+   <style>
+      .item {
+         padding: 10px;
+         margin: 5px;
+         background: #eee;
+         cursor: move;
+      }
+
+      .item.dragging {
+         opacity: 0.5;
+      }
+
+      .drop-zone {
+         padding: 20px;
+         border: 2px dashed #ccc;
+         margin-top: 20px;
+      }
+
+      .drop-zone.dragover {
+         background: #f0f8ff;
+         border-color: #0066cc;
+      }
+   </style>
+</body>
+
+</html>

@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Counter Example</title>
+</head>
+
+<body>
+   <div bind-function="CounterComponent">
+      <h3>{{title}}</h3>
+      <p>Count: <span bind-class="count > 5 ? 'bold blue' : ''">{{count}}</span></p>
+      <button on-click="count++">Increment</button>
+      <button on-click="count--">Decrement</button>
+      <button on-click="count = 0">Reset</button>
+   </div>
+   <script>
+      function CounterComponent(data) {
+         data.title = 'Simple Counter';
+         data.count = 0;
+      }
+   </script>
+</body>
+
+</html>

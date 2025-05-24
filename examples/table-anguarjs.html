@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html ng-app="tableApp">
+
+<head>
+   <title>Counter Example</title>
+   <script src="../../angular.min.js"></script>
+   <style>
+      .row-even {
+         background-color: #f2f2f2;
+      }
+
+      .row-odd {
+         background-color: #ffffff;
+      }
+
+      .data-table {
+         width: 100%;
+         border-collapse: collapse;
+      }
+
+      .data-table th,
+      .data-table td {
+         padding: 8px;
+         border: 1px solid #ddd;
+      }
+   </style>
+</head>
+
+<body>
+   <div ng-controller="TableController">
+      <h3>{{title}}</h3>
+      <table class="data-table">
+         <thead>
+            <tr>
+               <th ng-repeat="col in columns">{{col.name}}</th>
+            </tr>
+         </thead>
+         <tbody>
+            <tr ng-repeat="row in rows" ng-class="'row-' + ($index % 2 === 0 ? 'even' : 'odd')">
+               <td ng-repeat="(key, value) in row">
+                  <div ng-if="$index == 2">Ade 12323 {{key}}</div>
+                  <div ng-if="$index !== 2">{{value}}</div>
+               </td>
+            </tr>
+         </tbody>
+      </table>
+   </div>
+
+   <script>
+      var app = angular.module('tableApp', []);
+
+      app.controller('TableController', function ($scope) {
+         $scope.title = 'Simple Data Table';
+         $scope.columns = [
+            { name: 'Name' },
+            { name: 'Age' },
+            { name: 'Country' }
+         ];
+         $scope.rows = [
+            { name: 'John Doe', age: 30, country: 'USA' },
+            { name: 'Jane Smith', age: 25, country: 'UK' },
+            { name: 'Sam Brown', age: 22, country: 'Canada' }
+         ];
+
+         // create 10000 rows
+         for (let i = 0; i < 10000; i++) {
+            $scope.rows.push({
+               name: 'Name ' + i,
+               age: Math.floor(Math.random() * 100),
+               country: 'Country ' + i
+            });
+         }
+      });
+   </script>
+</body>
+
+</html>

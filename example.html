@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>LightBind Framework Demo</title>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/vs2015.min.css">
+   <link rel="stylesheet" href="./examples/example.css">
+   <!-- Import LightBind as a module -->
+   <script type="module">
+      import { LightBind } from './lightbind.js';
+      window.lightBind = new LightBind({
+         debug: true,
+         componentsPath: '../../components',
+         dialogsPath: '../../dialog'
+      });
+      lightBind.setGlobals();
+      // Initialize at page load for any components already in the DOM
+      lightBind.start();
+   </script>
+
+</head>
+
+<body>
+   <h1>LightBind Framework Demo</h1>
+   <div id="examples-container">
+      <!-- Examples will be loaded here -->
+   </div>
+
+   <!-- Load scripts -->
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+   <script>
+      // List of example files to load
+      const examples = [
+         'counter.html',
+         'conditional.html',
+         'list.html',
+         'table.html',
+         'drag&drop.html',
+         'style-binding.html',
+         'attr-svg.html',
+         'nested-components.html',
+         'data-table.html'
+      ];
+
+      // Function to load an example file
+      async function loadExample(filename) {
+         try {
+            const response = await fetch(filename);
+            const content = await response.text();
+            return content;
+         } catch (error) {
+            console.error(`Failed to load ${filename}:`, error);
+            return `<p>Error loading ${filename}</p>`;
+         }
+      }
+
+      // Function to create a demo section
+      function createDemoSection(exampleHtml, index) {
+         const parser = new DOMParser();
+         const doc = parser.parseFromString(exampleHtml, 'text/html');
+
+         // Create container
+         const section = document.createElement('div');
+         section.className = 'demo-section';
+         section.id = `demo-${index}`;
+
+         // Create content container
+         const content = document.createElement('div');
+         content.className = 'section-content';
+
+         // Create demo area
+         const demoArea = document.createElement('div');
+         demoArea.className = 'section-demo';
+
+         // Extract title from example
+         const title = doc.querySelector('title')?.textContent || `Example ${index + 1}`;
+
+         // Add the demo content
+         demoArea.innerHTML = `<h2>${title}</h2>`;
+
+         // Extract scripts from the example to run them separately and properly
+         const scripts = [];
+         let modifiedHtml = exampleHtml;
+
+         // Extract component functions from scripts to register them globally
+         modifiedHtml = modifiedHtml.replace(/<script>([\s\S]*?)<\/script>/gi, (match, scriptContent) => {
+            // Save the script for later execution
+            scripts.push(scriptContent.trim());
+            return ''; // Remove script from HTML
+         });
+
+         // Clone the body content into the demo area
+         Array.from(doc.body.children).forEach(child => {
+            demoArea.appendChild(child.cloneNode(true));
+         });
+
+         // Execute the scripts after adding the HTML
+         scripts.forEach(scriptContent => {
+            try {
+               // Extract function definitions and register them globally
+               const functionMatch = scriptContent.match(/function\s+([A-Za-z0-9_]+)\s*\(/);
+               if (functionMatch && functionMatch[1]) {
+                  const functionName = functionMatch[1];
+                  // Register the function globally so LightBind can find it
+                  eval(`window.${functionName} = ${scriptContent}`);
+                  console.log(`Registered function: ${functionName}`);
+               } else {
+                  // Just execute the script if it's not a function definition
+                  eval(scriptContent);
+               }
+            } catch (error) {
+               console.error('Error executing script:', error);
+            }
+         });
+
+         // Create code area
+         const codeArea = document.createElement('div');
+         codeArea.className = 'section-code';
+
+         // Extract HTML for display (clean it up for better display)
+         let displayHtml = exampleHtml
+            .replace(/<!DOCTYPE.*?>/i, '')
+            .replace(/<html>|<\/html>/gi, '')
+            .replace(/<head>.*?<\/head>/is, '')
+            .replace(/<body>|<\/body>/gi, '')
+            .trim();
+
+         // Escape HTML for proper display
+         const escapedHtml = displayHtml
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+         codeArea.innerHTML = `
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-label">${title}</span>
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-html">${escapedHtml}</code></pre>
+        </div>
+      `;
+
+         // Add the demo and code areas to the section
+         content.appendChild(demoArea);
+         content.appendChild(codeArea);
+         section.appendChild(content);
+
+         return section;
+      }
+
+      // Function to copy code
+      function copyCode(button) {
+         const codeContainer = button.closest('.code-container');
+         const codeBlock = codeContainer.querySelector('pre code');
+
+         // Get the content and decode HTML entities back to their original form
+         const content = codeBlock.textContent
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'");
+
+         const textArea = document.createElement('textarea');
+         textArea.value = content;
+         document.body.appendChild(textArea);
+         textArea.select();
+         document.execCommand('copy');
+         document.body.removeChild(textArea);
+
+         // Show feedback
+         const originalText = button.innerText;
+         button.innerText = 'Copied!';
+         button.style.backgroundColor = '#28a745';
+
+         setTimeout(() => {
+            button.innerText = originalText;
+            button.style.backgroundColor = '#007bff';
+         }, 1500);
+      }
+
+      // Load all examples and add them to the page
+      async function loadAllExamples() {
+         const container = document.getElementById('examples-container');
+
+         for (let i = 0; i < examples.length; i++) {
+            const exampleContent = await loadExample('./examples/' + examples[i]);
+            const section = createDemoSection(exampleContent, i);
+            container.appendChild(section);
+         }
+
+         // Initialize syntax highlighting
+         document.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+         });
+
+         // Initialize LightBind on the examples container
+         console.log('All examples loaded, initializing LightBind components...');
+         setTimeout(() => {
+            if (window.lightBind) {
+               console.log('Starting LightBind on examples container');
+               window.lightBind.start('#examples-container');
+            } else {
+               console.error('LightBind not available');
+            }
+         }, 500);
+      }
+
+      // Make copy function globally available
+      window.copyCode = copyCode;
+
+      // Start loading examples when the page is ready
+      document.addEventListener('DOMContentLoaded', loadAllExamples);
+   </script>
+</body>
+
+</html>

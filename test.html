@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Framework Performance Benchmark</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+      background-color: #f5f5f5;
+    }
+
+    h1,
+    h2 {
+      color: #2c3e50;
+    }
+
+    .control-panel {
+      background-color: #fff;
+      border-radius: 5px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-right: 10px;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #2980b9;
+    }
+
+    button:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+
+    .framework-container {
+      display: none;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      overflow: auto;
+      height: 400px;
+    }
+
+    .results-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    .results-table th,
+    .results-table td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: left;
+    }
+
+    .results-table th {
+      background-color: #3498db;
+      color: white;
+    }
+
+    .results-table tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    .results-table tr:hover {
+      background-color: #e3f2fd;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    .data-table th,
+    .data-table td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+
+    .data-table th {
+      background-color: #f2f2f2;
+      position: sticky;
+      top: 0;
+    }
+
+    .data-table tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    .log-container {
+      background-color: #2c3e50;
+      color: #ecf0f1;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-family: monospace;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      margin: 5px 0;
+      border-bottom: 1px solid #34495e;
+      padding-bottom: 5px;
+    }
+
+    .chart-container {
+      height: 400px;
+      margin-top: 20px;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 20px;
+      font-style: italic;
+      color: #7f8c8d;
+    }
+
+    .fastest {
+      color: #27ae60;
+      font-weight: bold;
+    }
+
+    .slowest {
+      color: #c0392b;
+      font-weight: bold;
+    }
+
+    .tab-container {
+      margin-top: 20px;
+    }
+
+    .tab-buttons {
+      display: flex;
+      margin-bottom: -1px;
+    }
+
+    .tab-button {
+      padding: 10px 20px;
+      background-color: #ecf0f1;
+      border: 1px solid #bdc3c7;
+      border-bottom: none;
+      border-radius: 5px 5px 0 0;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+
+    .tab-button.active {
+      background-color: #fff;
+      border-bottom: 1px solid #fff;
+    }
+
+    .tab-content {
+      border: 1px solid #bdc3c7;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 0 5px 5px 5px;
+    }
+
+    .tab-panel {
+      display: none;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .progress-container {
+      width: 100%;
+      height: 20px;
+      background-color: #ecf0f1;
+      border-radius: 10px;
+      margin: 20px 0;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background-color: #3498db;
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Framework Performance Benchmark</h1>
+
+  <div class="control-panel">
+    <h2>Test Controls</h2>
+    <button id="generateDataBtn">1. Generate Test Data</button>
+    <button id="runAllTestsBtn" disabled>2. Run All Tests</button>
+    <button id="clearResultsBtn" disabled>Clear Results</button>
+    <div class="progress-container">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+    <div>
+      <label for="rowCount">Row Count:</label>
+      <input type="number" id="rowCount" value="1000" min="100" max="10000">
+      <label for="colCount">Column Count:</label>
+      <input type="number" id="colCount" value="10" min="5" max="20">
+      <label for="iterations">Test Iterations:</label>
+      <input type="number" id="iterations" value="3" min="1" max="10">
+    </div>
+  </div>
+
+  <div class="tab-container">
+    <div class="tab-buttons">
+      <div class="tab-button active" data-tab="results">Results</div>
+      <div class="tab-button" data-tab="log">Log</div>
+      <div class="tab-button" data-tab="chart">Chart</div>
+      <div class="tab-button" data-tab="data">Test Data</div>
+    </div>
+
+    <div class="tab-content">
+      <div class="tab-panel active" id="results-panel">
+        <table class="results-table" id="resultsTable">
+          <thead>
+            <tr>
+              <th>Framework</th>
+              <th>Initial Render (ms)</th>
+              <th>Update All (ms)</th>
+              <th>Sort (ms)</th>
+              <th>Filter (ms)</th>
+              <th>Memory Increase (MB)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr>
+              <td>LightBind</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>Pending</td>
+            </tr>
+            <tr>
+              <td>AngularJS</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>Pending</td>
+            </tr>
+            <tr>
+              <td>Vue.js</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>Pending</td>
+            </tr>
+            <tr>
+              <td>React</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+              <td>Pending</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="tab-panel" id="log-panel">
+        <div class="log-container" id="logContainer">
+          <div class="log-entry">Benchmark log will appear here...</div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="chart-panel">
+        <div class="chart-container">
+          <canvas id="resultsChart"></canvas>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="data-panel">
+        <h3>Sample of Test Data</h3>
+        <div id="sampleDataContainer">
+          <p class="loading">Generate test data first...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="frameworkContainers">
+    <!-- LightBind -->
+    <div id="lightbind-container" class="framework-container">
+      <h2>LightBind Table</h2>
+      <div id="lightBindTableComponent">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th bind-repeat="col in columns">{{col.name}}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr bind-repeat="row in rows" bind-class="'row-' + ($index % 2 === 0 ? 'even' : 'odd')">
+              <td bind-repeat="(key, value) in row">{{value}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- AngularJS -->
+    <div id="angularjs-container" class="framework-container" ng-app="benchmarkApp" ng-controller="AngularJSController">
+      <h2>AngularJS Table</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th ng-repeat="col in columns">{{col.name}}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr ng-repeat="row in rows" ng-class="'row-' + ($index % 2 === 0 ? 'even' : 'odd')">
+            <td ng-repeat="(key, value) in row">{{value}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Vue.js -->
+    <div id="vue-container" class="framework-container">
+      <h2>Vue.js Table</h2>
+      <div id="vue-app">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th v-for="col in columns" :key="col.id">{{ col.name }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in rows" :key="row.id" :class="'row-' + (index % 2 === 0 ? 'even' : 'odd')">
+              <td v-for="(value, key) in row" :key="key">{{ value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- React -->
+    <div id="react-container" class="framework-container">
+      <h2>React Table</h2>
+      <div id="react-app"></div>
+    </div>
+  </div>
+
+  <!-- Load Framework Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/angular.js/1.8.2/angular.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+  <!-- Initialize AngularJS module -->
+  <script>
+    // Define the Angular module first, before any initialization happens
+    angular.module('benchmarkApp', [])
+      .controller('AngularJSController', function ($scope) {
+        $scope.columns = [];
+        $scope.rows = [];
+      });
+  </script>
+
+  <!-- LightBind Library (Include your files) -->
+  <script type="module">
+    import { LightBind } from './lightbind.js';
+    let lightBind = new LightBind();
+    lightBind.setGlobals();
+    window.lightBind = lightBind; // Make LightBind globally accessible
+    lightBind.start();
+  </script>
+
+  <!-- Benchmark Script -->
+  <script>
+    // Global variables
+    let testData = null;
+    let testColumns = null;
+    let chart = null;
+    let currentFrameworkIndex = 0;
+    let results = {
+      'LightBind': { render: [], update: [], sort: [], filter: [], memory: [] }
+      // 'AngularJS': { render: [], update: [], sort: [], filter: [], memory: [] },
+      // 'Vue.js': { render: [], update: [], sort: [], filter: [], memory: [] },
+      // 'React': { render: [], update: [], sort: [], filter: [], memory: [] }
+    };
+    let iterationCount = 3;
+    let currentIteration = 0;
+
+    // Helper function to measure performance
+    async function measurePerformance(framework, operationType, operationCallback) {
+      const startTime = performance.now();
+
+      await operationCallback(); // Execute the operation
+
+      // Wait for operation to complete with appropriate delay
+      const delay = operationType === 'render' ? 100 : 50;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      const endTime = performance.now();
+      const elapsedTime = endTime - startTime;
+
+      // Record the result
+      results[framework][operationType].push(elapsedTime);
+
+      // Log the result
+      logMessage(`${framework} ${operationType}: ${elapsedTime.toFixed(2)}ms`);
+
+      return elapsedTime;
+    }
+
+    // Initialization
+    document.addEventListener('DOMContentLoaded', () => {
+      // Set up tabs
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', () => {
+          const tabId = button.getAttribute('data-tab');
+
+          // Update active tab button
+          document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+          });
+          button.classList.add('active');
+
+          // Update active tab panel
+          document.querySelectorAll('.tab-panel').forEach(panel => {
+            panel.classList.remove('active');
+          });
+          document.getElementById(`${tabId}-panel`).classList.add('active');
+
+          // Update chart if showing chart tab
+          if (tabId === 'chart' && chart) {
+            chart.update();
+          }
+        });
+      });
+
+      // Set up button event listeners
+      document.getElementById('generateDataBtn').addEventListener('click', generateTestData);
+      document.getElementById('runAllTestsBtn').addEventListener('click', startTests);
+      document.getElementById('clearResultsBtn').addEventListener('click', clearResults);
+
+      // Log initial message
+      logMessage('Benchmark initialized. Click "Generate Test Data" to begin.');
+    });
+
+    function logMessage(message) {
+      const logContainer = document.getElementById('logContainer');
+      const logEntry = document.createElement('div');
+      logEntry.className = 'log-entry';
+      logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function updateProgress(percent) {
+      document.getElementById('progressBar').style.width = `${percent}%`;
+    }
+
+    function generateTestData() {
+      const startTime = performance.now();
+      logMessage('Generating test data...');
+
+      const rowCount = parseInt(document.getElementById('rowCount').value, 10);
+      const colCount = parseInt(document.getElementById('colCount').value, 10);
+      iterationCount = parseInt(document.getElementById('iterations').value, 10);
+
+      // Generate column definitions
+      testColumns = [];
+      for (let i = 0; i < colCount; i++) {
+        testColumns.push({
+          id: `col${i}`,
+          name: `Column ${i + 1}`,
+          field: `field${i}`
+        });
+      }
+
+      // Generate row data
+      testData = [];
+      for (let i = 0; i < rowCount; i++) {
+        const row = { id: i };
+        for (let j = 0; j < colCount; j++) {
+          if (j === 0) {
+            row[`field${j}`] = `Item ${i}`;
+          } else if (j === 1) {
+            row[`field${j}`] = Math.floor(Math.random() * 1000);
+          } else if (j === 2) {
+            row[`field${j}`] = Math.random().toFixed(2);
+          } else if (j === 3) {
+            const date = new Date();
+            date.setDate(date.getDate() - Math.floor(Math.random() * 365));
+            row[`field${j}`] = date.toLocaleDateString();
+          } else {
+            row[`field${j}`] = `Value ${i}-${j}`;
+          }
+        }
+        testData.push(row);
+      }
+
+      // Show sample of data
+      const sampleContainer = document.getElementById('sampleDataContainer');
+      sampleContainer.innerHTML = '';
+
+      const table = document.createElement('table');
+      table.className = 'data-table';
+
+      // Create header
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      testColumns.forEach(col => {
+        const th = document.createElement('th');
+        th.textContent = col.name;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Create sample rows (first 10)
+      const tbody = document.createElement('tbody');
+      const sampleSize = Math.min(10, testData.length);
+      for (let i = 0; i < sampleSize; i++) {
+        const tr = document.createElement('tr');
+        const row = testData[i];
+        testColumns.forEach(col => {
+          const td = document.createElement('td');
+          td.textContent = row[col.field];
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      }
+      table.appendChild(tbody);
+      sampleContainer.appendChild(table);
+
+      if (testData.length > sampleSize) {
+        const note = document.createElement('p');
+        note.textContent = `... and ${testData.length - sampleSize} more rows`;
+        sampleContainer.appendChild(note);
+      }
+
+      const endTime = performance.now();
+      logMessage(`Test data generated: ${rowCount} rows × ${colCount} columns in ${(endTime - startTime).toFixed(2)}ms`);
+
+      // Enable run tests button
+      document.getElementById('runAllTestsBtn').disabled = false;
+    }
+
+    // Updated clearResults function for the benchmark
+    function clearResults() {
+      // Reset results table
+      const resultsRows = document.getElementById('resultsBody').querySelectorAll('tr');
+      resultsRows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        cells[1].textContent = '-'; // Render
+        cells[2].textContent = '-'; // Update
+        cells[3].textContent = '-'; // Sort
+        cells[4].textContent = '-'; // Filter
+        cells[5].textContent = '-'; // Memory
+        cells[6].textContent = 'Pending'; // Status
+      });
+
+      // Reset results data
+      for (const framework in results) {
+        results[framework] = { render: [], update: [], sort: [], filter: [], memory: [] };
+      }
+
+      // Reset progress
+      updateProgress(0);
+
+
+      // Clean up other frameworks' containers
+      // const containers = document.querySelectorAll('.framework-container');
+      // containers.forEach(container => {
+      //   container.style.display = 'none';
+      //   // Keep original container but clear contents of children
+      //   // This preserves the framework's container while removing dynamic content
+      //   Array.from(container.children).forEach(child => {
+      //     if (child.tagName === 'H2') return; // Keep the heading
+      //     child.innerHTML = '';
+      //   });
+      // });
+
+      // Reset chart
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+
+      logMessage('Results cleared');
+
+      // Reset test state
+      currentFrameworkIndex = 0;
+      currentIteration = 0;
+    }
+
+    function startTests() {
+      clearResults();
+      document.getElementById('runAllTestsBtn').disabled = true;
+      document.getElementById('generateDataBtn').disabled = true;
+      document.getElementById('clearResultsBtn').disabled = true;
+
+      logMessage(`Starting benchmark tests with ${iterationCount} iterations per framework...`);
+
+      const frameworks = ['LightBind', 'AngularJS', 'Vue.js', 'React'];
+      currentFrameworkIndex = 0;
+      currentIteration = 0;
+
+      runNextTest();
+    }
+
+    function runNextTest() {
+      const frameworks = ['LightBind', 'AngularJS', 'Vue.js', 'React'];
+
+      if (currentIteration >= iterationCount) {
+        currentIteration = 0;
+        currentFrameworkIndex++;
+      }
+
+      if (currentFrameworkIndex >= frameworks.length) {
+        // All tests completed
+        finalizeResults();
+        return;
+      }
+
+      const framework = frameworks[currentFrameworkIndex];
+      const iteration = currentIteration + 1;
+
+      const totalTests = frameworks.length * iterationCount;
+      const testsCompleted = (currentFrameworkIndex * iterationCount) + currentIteration;
+      const progressPercent = (testsCompleted / totalTests) * 100;
+
+      updateProgress(progressPercent);
+
+      logMessage(`Testing ${framework} (Iteration ${iteration}/${iterationCount})`);
+
+      // Run the appropriate test
+      switch (framework) {
+        case 'LightBind':
+          runLightBindTest();
+          break;
+        case 'AngularJS':
+          runAngularJSTest();
+          break;
+        case 'Vue.js':
+          runVueTest();
+          break;
+        case 'React':
+          runReactTest();
+          break;
+      }
+
+      currentIteration++;
+    }
+
+    async function runLightBindTest() {
+      try {
+        const container = document.getElementById('lightbind-container');
+        container.style.display = 'block';
+
+        function lightBindTableComponent(scope) {
+          scope.columns = [];
+          scope.rows = [];
+          scope.columns = [...testColumns];
+          scope.rows = [...testData];
+          scope.$render();
+        }
+
+        // Measure memory before
+        const memoryBefore = await getMemoryUsage();
+
+        // Initialize LightBind with test data
+        let component;
+        await measurePerformance('LightBind', 'render', async () => {
+          // Force a re-initialization
+          const element = container.querySelector('#lightBindTableComponent');
+          component = window.LightBind.initializeComponent(element, lightBindTableComponent);
+        });
+
+        // Measure update all
+        await measurePerformance('LightBind', 'update', async () => {
+          // Update all rows with modified data
+          const updatedData = testData.map(row => {
+            const newRow = { ...row };
+            for (let i = 0; i < testColumns.length; i++) {
+              if (typeof newRow[`field${i}`] === 'string') {
+                newRow[`field${i}`] = newRow[`field${i}`] + ' (updated)';
+              } else if (typeof newRow[`field${i}`] === 'number') {
+                newRow[`field${i}`] = newRow[`field${i}`] + 1;
+              }
+            }
+            return newRow;
+          });
+
+          component.scope.rows = updatedData;
+          component.scope.$render();
+
+          // await new Promise(resolve => setTimeout(resolve, 1000));
+        });
+
+        // Measure sort
+        await measurePerformance('LightBind', 'sort', async () => {
+          // Sort by first column
+          const sortedData = [...component.scope.rows].sort((a, b) => {
+            return a.field0.localeCompare(b.field0);
+          });
+          component.scope.rows = sortedData;
+          component.scope.$render();
+        });
+
+        // Measure filter
+        await measurePerformance('LightBind', 'filter', async () => {
+          // Filter to show only even-numbered rows
+          const filteredData = testData.filter(row => row.id % 2 === 0);
+          component.scope.rows = filteredData;
+          component.scope.$render();
+        });
+
+        // Measure memory after
+        const memoryAfter = await getMemoryUsage();
+        const memoryIncrease = memoryAfter - memoryBefore;
+        results['LightBind'].memory.push(memoryIncrease);
+
+        container.style.display = 'none';
+
+        updateResultsTable('LightBind');
+
+        // Move to next test
+        setTimeout(runNextTest, 500);
+
+      } catch (error) {
+        logMessage(`Error in LightBind test: ${error.message}`);
+        console.error('LightBind test error:', error);
+
+        // Mark as error in results
+        results['LightBind'].error = error.message;
+        updateResultsTable('LightBind', true);
+
+        // Continue with next test
+        setTimeout(runNextTest, 500);
+      }
+    }
+
+    async function runAngularJSTest() {
+      try {
+        const container = document.getElementById('angularjs-container');
+        container.style.display = 'block';
+
+        // Get the Angular scope
+        let scope = angular.element(container).scope();
+
+        // If no scope is found, bootstrap Angular on the container
+        if (!scope) {
+          angular.bootstrap(container, ['benchmarkApp']);
+          scope = angular.element(container).scope();
+        }
+
+        // Measure memory before
+        const memoryBefore = await getMemoryUsage();
+
+        // Measure render
+        await measurePerformance('AngularJS', 'render', async () => {
+          if (scope) {
+            scope.$apply(function () {
+              scope.columns = [...testColumns];
+              scope.rows = [...testData];
+            });
+          } else {
+            throw new Error("Could not get AngularJS scope");
+          }
+        });
+
+        // Measure update all
+        await measurePerformance('AngularJS', 'update', async () => {
+          if (scope) {
+            scope.$apply(function () {
+              // Update all rows with modified data
+              scope.rows = testData.map(row => {
+                const newRow = { ...row };
+                for (let i = 0; i < testColumns.length; i++) {
+                  if (typeof newRow[`field${i}`] === 'string') {
+                    newRow[`field${i}`] = newRow[`field${i}`] + ' (updated)';
+                  } else if (typeof newRow[`field${i}`] === 'number') {
+                    newRow[`field${i}`] = newRow[`field${i}`] + 1;
+                  }
+                }
+                return newRow;
+              });
+            });
+          }
+        });
+
+        // Measure sort
+        await measurePerformance('AngularJS', 'sort', async () => {
+          if (scope) {
+            scope.$apply(function () {
+              // Sort by first column
+              scope.rows = [...scope.rows].sort((a, b) => {
+                return a.field0.localeCompare(b.field0);
+              });
+            });
+          }
+        });
+
+        // Measure filter
+        await measurePerformance('AngularJS', 'filter', async () => {
+          if (scope) {
+            scope.$apply(function () {
+              // Filter to show only even-numbered rows
+              scope.rows = testData.filter(row => row.id % 2 === 0);
+            });
+          }
+        });
+
+        // Measure memory after
+        const memoryAfter = await getMemoryUsage();
+        const memoryIncrease = memoryAfter - memoryBefore;
+        results['AngularJS'].memory.push(memoryIncrease);
+
+        container.style.display = 'none';
+
+        updateResultsTable('AngularJS');
+
+        // Move to next test
+        setTimeout(runNextTest, 500);
+
+      } catch (error) {
+        logMessage(`Error in AngularJS test: ${error.message}`);
+        console.error('AngularJS test error:', error);
+
+        // Mark as error in results
+        results['AngularJS'].error = error.message;
+        updateResultsTable('AngularJS', true);
+
+        // Continue with next test
+        setTimeout(runNextTest, 500);
+      }
+    }
+
+    async function runVueTest() {
+      try {
+        const container = document.getElementById('vue-container');
+        container.style.display = 'block';
+
+        // Measure memory before
+        const memoryBefore = await getMemoryUsage();
+
+        // Check if Vue app exists and clean up properly depending on Vue version
+        if (window.vueApp) {
+          try {
+            // Vue 3
+            if (typeof window.vueApp.unmount === 'function') {
+              window.vueApp.unmount();
+            }
+            // Vue 2
+            else if (typeof window.vueApp.$destroy === 'function') {
+              window.vueApp.$destroy();
+            }
+          } catch (e) {
+            console.warn("Error cleaning up Vue app:", e);
+          }
+          window.vueApp = null;
+        }
+
+        // Clear the Vue app container
+        const vueAppContainer = document.getElementById('vue-app');
+        if (vueAppContainer) {
+          vueAppContainer.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th v-for="col in columns" :key="col.id">{{ col.name }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(row, index) in rows" :key="row.id" :class="'row-' + (index % 2 === 0 ? 'even' : 'odd')">
+              <td v-for="(value, key) in row" :key="key">{{ value }}</td>
+            </tr>
+          </tbody>
+        </table>
+      `;
+        }
+
+        // Measure render
+        await measurePerformance('Vue.js', 'render', async () => {
+          // Check which Vue version is available
+          if (typeof Vue.createApp === 'function') {
+            // Vue 3
+            window.vueApp = Vue.createApp({
+              data() {
+                return {
+                  columns: [...testColumns],
+                  rows: [...testData]
+                };
+              }
+            }).mount('#vue-app');
+          } else if (typeof Vue === 'function') {
+            // Vue 2
+            window.vueApp = new Vue({
+              el: '#vue-app',
+              data: {
+                columns: [...testColumns],
+                rows: [...testData]
+              }
+            });
+          } else {
+            throw new Error("No compatible Vue version found");
+          }
+        });
+
+        // Measure update all
+        await measurePerformance('Vue.js', 'update', async () => {
+          if (window.vueApp) {
+            // Update all rows with modified data
+            window.vueApp.rows = testData.map(row => {
+              const newRow = { ...row };
+              for (let i = 0; i < testColumns.length; i++) {
+                if (typeof newRow[`field${i}`] === 'string') {
+                  newRow[`field${i}`] = newRow[`field${i}`] + ' (updated)';
+                } else if (typeof newRow[`field${i}`] === 'number') {
+                  newRow[`field${i}`] = newRow[`field${i}`] + 1;
+                }
+              }
+              return newRow;
+            });
+          }
+        });
+
+        // Measure sort
+        await measurePerformance('Vue.js', 'sort', async () => {
+          if (window.vueApp) {
+            // Sort by first column
+            window.vueApp.rows = [...window.vueApp.rows].sort((a, b) => {
+              return a.field0.localeCompare(b.field0);
+            });
+          }
+        });
+
+        // Measure filter
+        await measurePerformance('Vue.js', 'filter', async () => {
+          if (window.vueApp) {
+            // Filter to show only even-numbered rows
+            window.vueApp.rows = testData.filter(row => row.id % 2 === 0);
+          }
+        });
+
+        // Measure memory after
+        const memoryAfter = await getMemoryUsage();
+        const memoryIncrease = memoryAfter - memoryBefore;
+        results['Vue.js'].memory.push(memoryIncrease);
+
+        container.style.display = 'none';
+
+        updateResultsTable('Vue.js');
+
+        // Move to next test
+        setTimeout(runNextTest, 500);
+
+      } catch (error) {
+        logMessage(`Error in Vue.js test: ${error.message}`);
+        console.error('Vue.js test error:', error);
+
+        // Mark as error in results
+        results['Vue.js'].error = error.message;
+        updateResultsTable('Vue.js', true);
+
+        // Continue with next test
+        setTimeout(runNextTest, 500);
+      }
+    }
+
+    async function runReactTest() {
+      try {
+        const container = document.getElementById('react-container');
+        container.style.display = 'block';
+
+        // Measure memory before
+        const memoryBefore = await getMemoryUsage();
+
+        // Define React component
+        const TableApp = () => {
+          const [columns, setColumns] = React.useState([...testColumns]);
+          const [rows, setRows] = React.useState([...testData]);
+
+          React.useEffect(() => {
+            // Store references to allow updates from outside component
+            window.reactTableComponent = {
+              updateRows: setRows,
+              rows: rows
+            };
+          }, [rows]);
+
+          return React.createElement(
+            'table',
+            { className: 'data-table' },
+            React.createElement(
+              'thead',
+              null,
+              React.createElement(
+                'tr',
+                null,
+                columns.map(col =>
+                  React.createElement('th', { key: col.id }, col.name)
+                )
+              )
+            ),
+            React.createElement(
+              'tbody',
+              null,
+              rows.map((row, rowIndex) =>
+                React.createElement(
+                  'tr',
+                  {
+                    key: row.id,
+                    className: `row-${rowIndex % 2 === 0 ? 'even' : 'odd'}`
+                  },
+                  Object.entries(row)
+                    .filter(([key]) => key.startsWith('field'))
+                    .map(([key, value]) =>
+                      React.createElement('td', { key }, value)
+                    )
+                )
+              )
+            )
+          );
+        };
+
+        // Measure render
+        await measurePerformance('React', 'render', async () => {
+          // Render React component
+          const reactRoot = document.getElementById('react-app');
+          ReactDOM.createRoot(reactRoot).render(React.createElement(TableApp));
+        });
+
+        // Measure update all
+        await measurePerformance('React', 'update', async () => {
+          if (window.reactTableComponent) {
+            // Update all rows with modified data
+            const updatedData = testData.map(row => {
+              const newRow = { ...row };
+              for (let i = 0; i < testColumns.length; i++) {
+                if (typeof newRow[`field${i}`] === 'string') {
+                  newRow[`field${i}`] = newRow[`field${i}`] + ' (updated)';
+                } else if (typeof newRow[`field${i}`] === 'number') {
+                  newRow[`field${i}`] = newRow[`field${i}`] + 1;
+                }
+              }
+              return newRow;
+            });
+
+            window.reactTableComponent.updateRows(updatedData);
+          }
+        });
+
+        // Measure sort
+        await measurePerformance('React', 'sort', async () => {
+          if (window.reactTableComponent) {
+            // Sort by first column
+            const sortedData = [...window.reactTableComponent.rows].sort((a, b) => {
+              return a.field0.localeCompare(b.field0);
+            });
+
+            window.reactTableComponent.updateRows(sortedData);
+          }
+        });
+
+        // Measure filter
+        await measurePerformance('React', 'filter', async () => {
+          if (window.reactTableComponent) {
+            // Filter to show only even-numbered rows
+            const filteredData = testData.filter(row => row.id % 2 === 0);
+
+            window.reactTableComponent.updateRows(filteredData);
+          }
+        });
+
+        // Measure memory after
+        const memoryAfter = await getMemoryUsage();
+        const memoryIncrease = memoryAfter - memoryBefore;
+        results['React'].memory.push(memoryIncrease);
+
+        container.style.display = 'none';
+
+        updateResultsTable('React');
+
+        // Move to next test
+        setTimeout(runNextTest, 500);
+
+      } catch (error) {
+        logMessage(`Error in React test: ${error.message}`);
+        console.error('React test error:', error);
+
+        // Mark as error in results
+        results['React'].error = error.message;
+        updateResultsTable('React', true);
+
+        // Continue with next test
+        setTimeout(runNextTest, 500);
+      }
+    }
+
+    function updateResultsTable(framework, isError = false) {
+      const resultsBody = document.getElementById('resultsBody');
+      const frameworkRows = Array.from(resultsBody.querySelectorAll('tr'));
+      const frameworkRow = frameworkRows.find(row => row.cells[0].textContent === framework);
+
+      if (frameworkRow) {
+        if (isError) {
+          frameworkRow.cells[6].textContent = 'Error: ' + (results[framework].error || 'Unknown error');
+          return;
+        }
+
+        const tests = results[framework];
+
+        // Calculate averages
+        const renderAvg = tests.render.length ? (tests.render.reduce((a, b) => a + b, 0) / tests.render.length).toFixed(2) : '-';
+        const updateAvg = tests.update.length ? (tests.update.reduce((a, b) => a + b, 0) / tests.update.length).toFixed(2) : '-';
+        const sortAvg = tests.sort.length ? (tests.sort.reduce((a, b) => a + b, 0) / tests.sort.length).toFixed(2) : '-';
+        const filterAvg = tests.filter.length ? (tests.filter.reduce((a, b) => a + b, 0) / tests.filter.length).toFixed(2) : '-';
+        const memoryAvg = tests.memory.length ? (tests.memory.reduce((a, b) => a + b, 0) / tests.memory.length).toFixed(2) : '-';
+
+        // Update cells
+        frameworkRow.cells[1].textContent = renderAvg;
+        frameworkRow.cells[2].textContent = updateAvg;
+        frameworkRow.cells[3].textContent = sortAvg;
+        frameworkRow.cells[4].textContent = filterAvg;
+        frameworkRow.cells[5].textContent = memoryAvg;
+
+        if (currentIteration === iterationCount - 1) {
+          frameworkRow.cells[6].textContent = 'Complete';
+        } else {
+          frameworkRow.cells[6].textContent = `Iteration ${currentIteration + 1}/${iterationCount}`;
+        }
+      }
+    }
+
+    async function getMemoryUsage() {
+      if (window.performance && window.performance.memory) {
+        return window.performance.memory.usedJSHeapSize / (1024 * 1024); // Convert to MB
+      }
+      return 0; // Return 0 if memory API is not available
+    }
+
+    function finalizeResults() {
+      logMessage('All tests completed!');
+
+      // Enable buttons
+      document.getElementById('runAllTestsBtn').disabled = false;
+      document.getElementById('generateDataBtn').disabled = false;
+      document.getElementById('clearResultsBtn').disabled = false;
+
+      // Update progress bar to 100%
+      updateProgress(100);
+
+      // Highlight fastest and slowest frameworks in results table
+      highlightResults();
+
+      // Create chart
+      createResultsChart();
+    }
+
+    function highlightResults() {
+      const resultsBody = document.getElementById('resultsBody');
+      const rows = Array.from(resultsBody.querySelectorAll('tr'));
+
+      // Get all frameworks that completed successfully
+      const frameworks = Object.keys(results).filter(framework =>
+        !results[framework].error &&
+        results[framework].render.length > 0
+      );
+
+      if (frameworks.length < 2) return; // Need at least 2 frameworks to compare
+
+      // Calculate average values for each metric
+      const metrics = ['render', 'update', 'sort', 'filter'];
+
+      metrics.forEach((metric, index) => {
+        // Get values for this metric from all frameworks
+        const values = frameworks.map(framework => {
+          const values = results[framework][metric];
+          return values.length ? values.reduce((a, b) => a + b, 0) / values.length : Infinity;
+        });
+
+        // Find min and max
+        const minValue = Math.min(...values);
+        const maxValue = Math.max(...values);
+
+        // Highlight cells
+        frameworks.forEach((framework, fIndex) => {
+          const frameworkRow = rows.find(row => row.cells[0].textContent === framework);
+          if (frameworkRow) {
+            const cell = frameworkRow.cells[index + 1]; // +1 because first cell is framework name
+            const value = values[fIndex];
+
+            if (value === minValue) {
+              cell.classList.add('fastest');
+            } else if (value === maxValue) {
+              cell.classList.add('slowest');
+            }
+          }
+        });
+      });
+    }
+
+    function createResultsChart() {
+      const ctx = document.getElementById('resultsChart').getContext('2d');
+
+      // Get all frameworks that completed successfully
+      const frameworks = Object.keys(results).filter(framework =>
+        !results[framework].error &&
+        results[framework].render.length > 0
+      );
+
+      if (frameworks.length === 0) return;
+
+      // Calculate average values for each metric
+      const metrics = ['render', 'update', 'sort', 'filter'];
+      const labels = ['Initial Render', 'Update All', 'Sort', 'Filter'];
+
+      const datasets = frameworks.map((framework, index) => {
+        // Generate color
+        const colors = [
+          'rgba(54, 162, 235, 0.7)',  // Blue
+          'rgba(255, 99, 132, 0.7)',  // Red
+          'rgba(75, 192, 192, 0.7)',  // Green
+          'rgba(255, 159, 64, 0.7)'   // Orange
+        ];
+
+        // Calculate average values
+        const data = metrics.map(metric => {
+          const values = results[framework][metric];
+          return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+
+        return {
+          label: framework,
+          data: data,
+          backgroundColor: colors[index % colors.length],
+          borderColor: colors[index % colors.length].replace('0.7', '1'),
+          borderWidth: 1
+        };
+      });
+
+      // Destroy existing chart if any
+      if (chart) {
+        chart.destroy();
+      }
+
+      // Create new chart
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: datasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: 'Time (ms)'
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'Framework Performance Comparison'
+            },
+            tooltip: {
+              callbacks: {
+                label: function (context) {
+                  return `${context.dataset.label}: ${context.raw.toFixed(2)} ms`;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+  </script>
+</body>
+
+</html>

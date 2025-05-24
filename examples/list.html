@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Todo List</title>
+</head>
+
+<body>
+   <div bind-function="ListComponent">
+      <div>
+         <input type="text" bind="newItem" on-keypress="$event.key === 'Enter' && addItem()" placeholder="Add new item and press Enter">
+         <button on-click="addItem()">Add Item</button>
+      </div>
+      <ul>
+         <li bind-repeat="item in todos">
+            <input type="checkbox" bind="item.completed" on-change="checkItems()">
+            <span bind-class="item.completed ? 'completed' : ''">{{$index + 1}}. {{item.text}}</span>
+            <button on-click="todos.splice($index, 1)">Remove</button>
+         </li>
+      </ul>
+      <div bind-if="todos.length === 0">
+         <p>No items in the list. Add some tasks!</p>
+      </div>
+      <p>Total: {{todos.length}} | Completed: {{completedCount}}</p>
+      {{todos}}
+   </div>
+   <script>
+      function ListComponent(data) {
+         data.todos = [
+            { text: 'Learn LightBind', completed: true },
+            { text: 'Build a simple app', completed: false },
+            { text: 'Create documentation', completed: false }
+         ];
+         data.addItem = function () {
+            if (data.newItem.trim()) {
+               data.todos.push({ text: data.newItem.trim(), completed: false });
+               data.newItem = '';
+            }
+         };
+         data.checkItems = function () {
+            data.completedCount = 0;
+            for (let todo of data.todos) {
+               console.log(todo);
+               if (todo.completed) data.completedCount++;
+            }
+         };
+         data.checkItems();
+      }
+   </script>
+</body>
+
+</html>

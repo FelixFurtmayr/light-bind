@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Style Bindings</title>
+</head>
+
+<body>
+   <div bind-function="StyleBindingComponent">
+      <div>
+         <label>Text color:</label>
+         <select bind="textColor">
+            <option value="black">Black</option>
+            <option value="red">Red</option>
+            <option value="blue">Blue</option>
+            <option value="green">Green</option>
+         </select>
+         <label>Font size:</label>
+         <input type="range" min="12" max="32" bind="fontSize">
+      </div>
+      <p bind-style="color: textColor, fontSize: fontSize + 'px'">
+         This text has dynamic styling. Current size: {{fontSize}}px
+      </p>
+      <div>
+         <label><input type="checkbox" bind="isHighlighted"> Highlight</label>
+         <p bind-class="isHighlighted ? 'highlight' : ''">
+            This paragraph can be highlighted
+         </p>
+      </div>
+   </div>
+   <script>
+      function StyleBindingComponent(data) {
+         data.textColor = 'black';
+         data.fontSize = 16;
+         data.isHighlighted = false;
+      }
+   </script>
+</body>
+
+</html>

@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Nested Components</title>
+</head>
+
+<body>
+   <div bind-function="ParentComponent">
+      <h3>Parent Component</h3>
+      <p>Parent message: {{message}}</p>
+      <input type="text" bind="message">
+      <div bind-function="ChildComponent" class="card">
+         <h4>Child Component</h4>
+         <p>Parent message inside: {{message}}</p>
+         <p>Child's own data: <input type="text" bind="childMessage"></p>
+         <button on-click="message = childMessage">
+            Update Parent Message</button>
+      </div>
+   </div>
+   <script>
+      function ParentComponent(data) {
+         data.message = 'Hello from parent';
+      }
+
+      function ChildComponent(data) {
+         data.childMessage = 'Hello from child';
+      }
+   </script>
+</body>
+
+</html>

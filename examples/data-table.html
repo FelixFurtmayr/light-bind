@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Data Table with Filtering and Sorting</title>
+</head>
+
+<body>
+   <div bind-function="DataTableComponent">
+      <h2>Employee Data Table</h2>
+      <div class="filter-container">
+         <input type="text" bind="searchText" on-input="updateSearch()" placeholder="Search by name or department...">
+         <button bind-class="activeFilter === 'all' ? 'filter-active' : ''" on-click="setFilter('all')">All</button>
+         <button bind-class="activeFilter === 'tech' ? 'filter-active' : ''" on-click="setFilter('tech')">Tech Dept</button>
+         <button bind-class="activeFilter === 'sales' ? 'filter-active' : ''" on-click="setFilter('sales')">Sales Dept</button>
+         <button bind-class="activeFilter === 'senior' ? 'filter-active' : ''" on-click="setFilter('senior')">Senior (>5 years)</button>
+      </div>
+      <table>
+         <thead>
+            <tr>
+               <th bind-repeat="column in columns" on-click="toggleSort(column.field)">
+                  {{column.field}}
+                  <span bind-class="sortField === column.field ? (sortDirection === 1 ? 'sort-indicator sort-asc' : 'sort-indicator sort-desc') : ''"></span>
+               </th>
+            </tr>
+         </thead>
+         <tbody>
+            <tr bind-repeat="employee in employees" filter="filterEmployee(item)" sort="sortCriteria"
+               bind-style="background: (employee.active ? 'white' : '#f9f9f9'), color: (employee.active ? 'black' : '#888')">
+               <td>{{employee.id}}</td>
+               <td>{{employee.name}}</td>
+               <td>{{employee.department}}</td>
+               <td>{{employee.position}}</td>
+               <td>{{employee.yearsOfService}}</td>
+               <td>${{employee.salary}}</td>
+               <td>
+                  <button on-click="toggleActive(employee)">
+                     {{employee.active ? 'Deactivate' : 'Activate'}}
+                  </button>
+                  <button on-click="promoteEmployee(employee)">Promote</button>
+               </td>
+            </tr>
+         </tbody>
+      </table>
+
+      <div bind-if="filteredCount === 0">
+         <p>No employees match your current filters.</p>
+      </div>
+      <div bind-if="filteredCount > 0">
+         <p>Showing {{filteredCount}} of {{employees.length}} employees</p>
+         <p>Average Salary: ${{averageSalary}}</p>
+      </div>
+      <h3>Add New Employee</h3>
+      <div>
+         <input type="text" bind="newEmployee.name" placeholder="Name">
+         <select bind="newEmployee.department">
+            <option value="">Select Department</option>
+            <option value="IT">IT</option>
+            <option value="Sales">Sales</option>
+            <option value="Marketing">Marketing</option>
+            <option value="HR">HR</option>
+            <option value="Finance">Finance</option>
+         </select>
+         <input type="text" bind="newEmployee.position" placeholder="Position">
+         <input type="number" bind="newEmployee.yearsOfService" placeholder="Years of Service">
+         <input type="number" bind="newEmployee.salary" placeholder="Salary">
+         <button on-click="addEmployee()">Add Employee</button>
+      </div>
+   </div>
+
+   <script>
+      function DataTableComponent(data) {
+         // Initial employee data
+         data.columns = [
+            { field: 'id', label: 'ID' },
+            { field: 'name', label: 'Name' },
+            { field: 'department', label: 'Department' },
+            { field: 'position', label: 'Position' },
+            { field: 'yearsOfService', label: 'Years of Service' },
+            { field: 'salary', label: 'Salary' },
+            { field: 'actions', label: 'Actions' }
+         ];
+         data.employees = [
+            { id: 1, name: "John Smith", department: "IT", position: "Developer", yearsOfService: 3, salary: 85000, active: true },
+            { id: 2, name: "Jane Doe", department: "Sales", position: "Manager", yearsOfService: 7, salary: 110000, active: true },
+            { id: 3, name: "Robert Johnson", department: "IT", position: "Senior Developer", yearsOfService: 6, salary: 105000, active: true },
+            { id: 4, name: "Emily Davis", department: "Marketing", position: "Specialist", yearsOfService: 2, salary: 65000, active: true },
+            { id: 5, name: "Michael Wilson", department: "IT", position: "DevOps Engineer", yearsOfService: 4, salary: 90000, active: true },
+            { id: 6, name: "Sarah Martinez", department: "HR", position: "Director", yearsOfService: 8, salary: 125000, active: true },
+            { id: 7, name: "David Thompson", department: "Sales", position: "Representative", yearsOfService: 1, salary: 60000, active: false },
+            { id: 8, name: "Jessica Brown", department: "Finance", position: "Analyst", yearsOfService: 5, salary: 80000, active: true },
+            { id: 9, name: "Thomas Anderson", department: "IT", position: "Team Lead", yearsOfService: 9, salary: 115000, active: true },
+            { id: 10, name: "Lisa Garcia", department: "Sales", position: "Senior Representative", yearsOfService: 6, salary: 90000, active: true }
+         ];
+         data.newEmployee = {
+            name: '',
+            department: '',
+            position: '',
+            yearsOfService: 0,
+            salary: 0
+         };
+         data.searchText = '';
+         data.activeFilter = 'all';
+         data.sortField = 'id';
+         data.sortDirection = 1;
+         data.sortCriteria = {
+            id: 1
+         };
+         data.filterEmployee = function (employee) {
+            if (data.searchText) {
+               const searchLower = data.searchText.toLowerCase();
+               const nameMatch = employee.name.toLowerCase().includes(searchLower);
+               const deptMatch = employee.department.toLowerCase().includes(searchLower);
+               if (!nameMatch && !deptMatch) {
+                  return false;
+               }
+            }
+            switch (data.activeFilter) {
+               case 'tech':
+                  return employee.department === 'IT';
+               case 'sales':
+                  return employee.department === 'Sales';
+               case 'senior':
+                  return employee.yearsOfService > 5;
+               case 'all':
+               default:
+                  return true;
+            }
+         };
+         data.setFilter = function (filterName) {
+            data.activeFilter = filterName;
+         };
+         data.updateSearch = function () {
+         };
+         data.toggleSort = function (field) {
+            if (data.sortField === field) {
+               data.sortDirection *= -1;
+            } else {
+               data.sortField = field;
+               data.sortDirection = 1;
+            }
+            data.sortCriteria = {};
+            data.sortCriteria[field] = data.sortDirection;
+         };
+         data.toggleActive = function (employee) {
+            employee.active = !employee.active;
+         };
+         data.promoteEmployee = function (employee) {
+            employee.salary = Math.round(employee.salary * 1.1);
+            employee.yearsOfService += 1;
+            if (employee.position.indexOf("Senior") === -1 && employee.yearsOfService >= 5) {
+               employee.position = "Senior " + employee.position;
+            }
+         };
+         data.addEmployee = function () {
+            if (!data.newEmployee.name || !data.newEmployee.department || !data.newEmployee.position) {
+               alert("Please fill in all required fields");
+               return;
+            }
+            const newId = Math.max(...data.employees.map(e => e.id)) + 1;
+            const employee = {
+               id: newId,
+               name: data.newEmployee.name,
+               department: data.newEmployee.department,
+               position: data.newEmployee.position,
+               yearsOfService: parseInt(data.newEmployee.yearsOfService) || 0,
+               salary: parseInt(data.newEmployee.salary) || 50000,
+               active: true
+            };
+            data.employees.push(employee);
+            data.newEmployee = {
+               name: '',
+               department: '',
+               position: '',
+               yearsOfService: 0,
+               salary: 0
+            };
+         };
+         Object.defineProperty(data, 'filteredCount', {
+            get: function () {
+               return data.employees.filter(data.filterEmployee).length;
+            }
+         });
+         Object.defineProperty(data, 'averageSalary', {
+            get: function () {
+               const filtered = data.employees.filter(data.filterEmployee);
+               if (filtered.length === 0) return 0;
+               const total = filtered.reduce((sum, emp) => sum + emp.salary, 0);
+               return Math.round(total / filtered.length);
+            }
+         });
+      }
+   </script>
+   <style>
+      table {
+         border-collapse: collapse;
+         width: 100%;
+         margin-top: 20px;
+         font-size: 12px;
+      }
+
+      th,
+      td {
+         border: 1px solid #ddd;
+         padding: 8px;
+         text-align: left;
+      }
+
+      th {
+         background-color: #f2f2f2;
+         cursor: pointer;
+      }
+
+      th:hover {
+         background-color: #e0e0e0;
+      }
+
+      .filter-container {
+         margin: 20px 0;
+         display: flex;
+         align-items: center;
+         gap: 10px;
+      }
+
+      .completed {
+         text-decoration: line-through;
+         color: #888;
+      }
+
+      .filter-active {
+         background-color: #4CAF50;
+         color: white;
+      }
+
+      button {
+         padding: 6px 12px;
+         cursor: pointer;
+         border: 1px solid #ccc;
+         background-color: #f8f8f8;
+         border-radius: 4px;
+      }
+
+      input[type="text"] {
+         padding: 6px;
+         width: 250px;
+      }
+
+      .sort-indicator {
+         margin-left: 5px;
+      }
+
+      .sort-asc::after {
+         content: "▲";
+      }
+
+      .sort-desc::after {
+         content: "▼";
+      }
+
+      .grey {
+         color: #888;
+      }
+   </style>
+</body>
+
+</html>

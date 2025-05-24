@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+   <title>Simple SVG Controls</title>
+</head>
+
+<body>
+   <div bind-function="SimpleSVGDemo">
+      <div>
+         <label>Size: <input type="range" min="10" max="100" bind="size"> {{size}}px</label>
+         <br>
+         <label>Color: <input type="range" min="0" max="360" bind="hue"> {{hue}}°</label>
+         <br>
+         <label>X: <input type="range" min="-5" max="5" bind="transformX"> {{transformX}}</label>
+      </div>
+      <svg width="200" height="200">
+         <circle cx="100" cy="100" bind-attr="r: size, fill: 'hsl(' + hue + ', 70%, 50%)', transform: 'translate('+ transformX +'0)'">
+         </circle>
+      </svg>
+   </div>
+   <script>
+      function SimpleSVGDemo(data) {
+         data.size = 50;
+         data.hue = 180;
+         data.transformX = 0;
+      }
+   </script>
+</body>
+
+</html>
