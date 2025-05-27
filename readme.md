@@ -1,6 +1,14 @@
 # LightBind
-
 LightBind is a minimalist JavaScript framework that binds html and js seamless and provides basic functionality. The developer can focus on creating optimized content for his application.
+
+## Live Demo
+https://felixfurtmayr.github.io/light-bind/example.html
+
+Running The Examples Locally: ES6 modules require a web server. Choose any of these options:
+
+> python3 -m http.server 8000
+
+Now visit: http://localhost:8000/example.html
 
 # Principles
 - Quick setup, Rapid Development, Minimal Footprint
@@ -46,15 +54,6 @@ function CounterApp(scope) {
 }
 </script>
 ```
-## Live Demo
-View the live demo at: https://[username].github.io/[repo-name]/example.html
-
-## Running The Examples Locally
-ES6 modules require a web server. Choose any of these options:
-
-> python3 -m http.server 8000
-
-Now visit: http://localhost:8000/example.html
 
 
 
