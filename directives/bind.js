@@ -64,6 +64,33 @@ class BindDirective extends BaseDirective {
   setInputValue(element, value) {
     if (element.type === 'checkbox') {
       element.checked = !!value;
+    } else if (element.tagName === 'SELECT') {
+      const previousValue = element.value;
+      element.value = value;
+      
+      // If setting failed and we have a real value to set
+      if (element.value !== value && value !== undefined && value !== null && value !== '') {
+        if (!element.__retryCount) element.__retryCount = 0;
+        
+        if (element.__retryCount < 3) {
+          element.__retryCount++;
+          this.log('debug', `Select value setting failed, retry ${element.__retryCount}/3 in ${10 * element.__retryCount}ms`);
+          
+          setTimeout(() => {
+            this.setInputValue(element, value);
+          }, 10 * element.__retryCount);
+        } else {
+          // Reset for future attempts
+          delete element.__retryCount;
+          this.log('warn', `Could not set select value to "${value}" after 3 retries`);
+        }
+      } else {
+        // Success - clean up
+        delete element.__retryCount;
+        if (previousValue !== element.value) {
+          this.log('debug', `Select value successfully set to "${value}"`);
+        }
+      }
     } else if (value !== undefined && value !== null) {
       // Verhindern von Cursor-Sprüngen bei Textfeldern
       if (document.activeElement !== element) {

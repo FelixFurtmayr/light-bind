@@ -288,6 +288,12 @@ export default function (options, lightBind) {
       ['extension', 'filename', 'mimetype', 'shortName'].forEach((key) => {
         if (file[key]) headers[key] = file[key];
       });
+
+      headers.filename = sanitizeFilenameForHTTP(headers.filename);
+      headers.shortName = sanitizeFilenameForHTTP(headers.shortName);
+
+      console.log('postFile: file should be a Blob, but got:', headers);
+
       file = new Blob([file.content], {  type: headers.mimetype || 'application/octet-stream' });
     }
 
@@ -419,6 +425,38 @@ export default function (options, lightBind) {
       };
   };
 
+  function sanitizeFilenameForHTTP(filename) {
+    // Preserve the file extension
+    const lastDotIndex = filename.lastIndexOf('.');
+    const name = lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+    const ext = lastDotIndex > 0 ? filename.substring(lastDotIndex) : '';
+    
+    // Remove or replace problematic characters
+    let sanitized = name
+      // Remove control characters (0-31, 127)
+      .replace(/[\x00-\x1F\x7F]/g, '')
+      // Remove characters that have special meaning in HTTP headers
+      .replace(/[()<>@,;:\\"\/\[\]?={}]/g, '')
+      // Replace spaces with underscores (optional, but recommended)
+      .replace(/\s+/g, '_')
+      // Remove any non-ASCII characters (optional, for maximum compatibility)
+      .replace(/[^\x20-\x7E]/g, '')
+      // Remove leading/trailing dots and spaces
+      .replace(/^[\s.]+|[\s.]+$/g, '');
+    
+    // Ensure the filename isn't empty after sanitization
+    if (!sanitized) {
+      sanitized = 'unnamed';
+    }
+    
+    // Limit length (optional, but good practice)
+    const maxLength = 255 - ext.length;
+    if (sanitized.length > maxLength) {
+      sanitized = sanitized.substring(0, maxLength);
+    }
+    
+    return sanitized + ext;
+  }
 
 
   return http;

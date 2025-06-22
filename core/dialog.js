@@ -115,12 +115,12 @@ export default function createDialogHandler(lightBind) {
     isInitialized = true;
     
     // Register the confirmDialog function
-    functionRegistry.set('confirm', function confirmDialog(data, { inputs }) {
+    functionRegistry.set('confirm', function confirmDialog(data, { onSuccess, text }) {
       data.continue = function () {
-        if (inputs.onSuccess) inputs.onSuccess();
-        data.closeDialog();
+        if (onSuccess) onSuccess();
+        data.closeDialog('confirmed');
       };
-      data.text = inputs.text || 'Are you sure you want to proceed?';
+      data.text = text || 'Are you sure you want to proceed?';
     });
     
     // Cache the confirm dialog template
@@ -147,6 +147,8 @@ export default function createDialogHandler(lightBind) {
       dialogOptions = { ...dialogOptions, ...optionsOrCallback };
       dialogOptions.sizeExplicitlySet = 'size' in optionsOrCallback;
     }
+
+    if (callback) dialogOptions.onSuccess = callback;
 
     // Save previous dialog if opening a confirm dialog
     let previousDialog = null;
@@ -207,7 +209,6 @@ export default function createDialogHandler(lightBind) {
       content: dialogContent,
       name: dialogName,
       options: dialogOptions,
-      callback: callback,
       resources: { js: [], css: [] },
       component: null,
       scope: {},
@@ -457,14 +458,12 @@ export default function createDialogHandler(lightBind) {
  
   function executeScriptContent(js, dialogId) {
     try {
-      // Find the first function to extract
       const extracted = extractFirstFunction(js);
-      // console.log('extracted', extracted);
       if (extracted) {
-        const fn = new Function(...extracted.params, extracted.body);
+        // Instead of creating with new Function, evaluate the entire function
+        // This preserves the destructuring syntax
+        const fn = eval(`(${extracted.fullFunction})`);
         functionRegistry.set(dialogId, fn);
-      }else {
-        console.error('No function found in script content', js);
       }
     } catch (error) {
       log('error', 'Error processing dialog script:', error);
@@ -477,14 +476,8 @@ export default function createDialogHandler(lightBind) {
 
       const dialogFunction = getDialogFunction(dialogId);
       if (!dialogFunction) return null;
-
-      // Setup options
-      const input = {...activeDialog.options};
-      if (typeof activeDialog.callback === 'function') {
-        input.onSuccess = activeDialog.callback;
-      }
       
-      const component = lightBind.initializeComponent(element, dialogFunction, input);
+      const component = lightBind.initializeComponent(element, dialogFunction, activeDialog.options);
       if (!component || !component.scope || !activeDialog) return null;
       
       // Add helper methods
@@ -545,11 +538,6 @@ export default function createDialogHandler(lightBind) {
 
     if ((result === 'escape-pressed' || result === 'overlay-click') && closeOverBtnRequired) {
       return notificationFn('Dialog close button is required, but no result provided.');
-    }
-    
-    if (typeof activeDialog.callback === 'function') {
-      result = result || {}; 
-      activeDialog.callback(result);
     }
 
     if (activeDialog.scope && activeDialog.scope.onClose) activeDialog.scope.onClose()

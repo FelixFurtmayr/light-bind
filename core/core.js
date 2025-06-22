@@ -718,6 +718,16 @@ export function createLightBind(options = {}) {
     
     // Create virtual DOM node for this component
     instance.virtualDOM.createFromDOM(element, component);
+
+    // if an input with a forbidden name is found, log a warning and rename it
+    inputs = inputs || {};
+    ['elem', 'attrs', 'bindings'].forEach(prop => {
+      if (inputs[prop] ) {
+        console.warn(`LightBind: Input property '${prop}' is reserved and will be renamed to '_${prop}'`);
+        inputs['_' + prop] = inputs[prop];
+        delete inputs[prop];
+      }
+    });
       
     // Call the bind function with basic information
     try {
@@ -725,7 +735,7 @@ export function createLightBind(options = {}) {
         elem: element,
         attrs: attrs,
         bindings: component.bindings,
-        inputs: inputs
+        ...inputs
       });
       
       // Call the $onInit hook if defined
