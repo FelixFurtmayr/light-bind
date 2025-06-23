@@ -137,29 +137,35 @@ const LightBindNotification = (function () {
     });
   }
 
+  function messageHelper(type){
+    return function (...args) {
+      let message;
+      if (args.length > 1) {
+        message = args.join(' ');
+      } else {
+        message = args[0];
+      }
+      if (typeof message === 'string') message = { content: message };
+      message.type = type;
+      return showNotification(message);
+    }
+  }
+
   // Helper methods for different notification types
-  function success(message) {
-    if (typeof message === 'string') message = { content: message };
-    message.type = 'success';
-    return showNotification(message);
+  function success(...args) {
+    return messageHelper('success')(...args);
   }
 
-  function error(message) {
-    if (typeof message === 'string') message = { content: message };
-    message.type = 'error';
-    return showNotification(message);
+  function error(...args) {
+    return messageHelper('error')(...args);
   }
 
-  function warning(message) {
-    if (typeof message === 'string') message = { content: message };
-    message.type = 'warning';
-    return showNotification(message);
+  function warning(...args) {
+    return messageHelper('warning')(...args);
   }
 
-  function info(message) {
-    if (typeof message === 'string') message = { content: message };
-    message.type = 'info';
-    return showNotification(message);
+  function info(...args) {
+    return messageHelper('info')(...args);
   }
 
   // Public API
