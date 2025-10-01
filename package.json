@@ -8,8 +8,8 @@
   },
   "description": "A minimalistic data binding library for JavaScript",
   "devDependencies": {
-    "@rollup/plugin-terser": "^0.4.4",
-    "rollup": "^4.52.3"
+    "@rollup/plugin-terser": "0.4.4",
+    "rollup": "4.52.3"
   },
   "scripts": {
     "build": "rollup -c",
