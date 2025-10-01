@@ -1,0 +1,14 @@
+{
+  "name": "light-bind",
+  "version": "0.7.0",
+  "type": "module",
+  "description": "A minimalistic data binding library for JavaScript",
+  "devDependencies": {
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.52.3"
+  },
+  "scripts": {
+    "build": "rollup -c",
+    "debug": "rollup lightbind.js --file lightbind.debug.js --format esm"
+  }
+}

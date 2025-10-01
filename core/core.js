@@ -1,11 +1,11 @@
 /*
 LightBind Core with enhanced $parent and $elem references and Virtual DOM integration
 */
-
 import { createDigestHandler } from './core_digest.js';
 import { createExpressionHandler } from './core_expressions.js';
 import { createBindingPathFinder } from './core_find_bindings.js';
-import { deepClone, getNestedProperty, isEqual, setNestedProperty, log as utilLog } from './core_utils.js';
+import { getValue } from './core_inputs.js';
+import { copyToClipboard, deepClone, getNestedProperty, isEqual, log as utilLog } from './core_utils.js';
 
 // Import modules
 import createDialogHandler from './dialog.js';
@@ -26,7 +26,6 @@ import { BindHtmlDirective } from '../directives/bind-html.js';
 import { BindIfDirective } from '../directives/bind-if.js';
 import { BindRepeatDirective } from '../directives/bind-repeat.js';
 import { BindStyleDirective } from '../directives/bind-style.js';
-import { BindTextDirective } from '../directives/bind-text.js';
 import { BindUploadDirective } from '../directives/bind-upload.js';
 import { BindDirective } from '../directives/bind.js';
 
@@ -80,7 +79,6 @@ export function createLightBind(options = {}) {
     deepClone,
     copy: deepClone,
     getNestedProperty,
-    setNestedProperty,
     http: LightBindHttp(options),
     storage: LightStorage,
     notification: LightBindNotification,
@@ -109,7 +107,6 @@ export function createLightBind(options = {}) {
     'bind-if': new BindIfDirective(instance),
     'bind-repeat': new BindRepeatDirective(instance),
     'bind-style': new BindStyleDirective(instance),
-    'bind-text': new BindTextDirective(instance),
     'bind-drag': new BindDragDirective(instance),
     'bind-drop': new BindDropDirective(instance),
     'bind-upload': new BindUploadDirective(instance)
@@ -123,7 +120,8 @@ export function createLightBind(options = {}) {
       storage: instance.storage,
       http: instance.http,
       dialog: instance.dialog,
-      notification: instance.notification
+      notification: instance.notification,
+      copyToClipboard,
     };
     
     if (!JSON.copy) JSON.copy = instance.deepClone;
@@ -260,14 +258,7 @@ export function createLightBind(options = {}) {
       const varName = attrValue.trim();
       
       if (!(varName in component.scope)) {
-        if (element.type === 'checkbox' || element.type === 'radio') {
-          component.scope[varName] = element.checked;
-        } else if (element.type === 'number') {
-          const initialValue = element.value ? Number(element.value) : 0;
-          component.scope[varName] = isNaN(initialValue) ? 0 : initialValue;
-        } else {
-          component.scope[varName] = element.value;
-        }
+        component.scope[varName] = getValue(element);
       } 
       else if (element.type === 'number' && typeof component.scope[varName] !== 'number') {
         const numValue = Number(component.scope[varName]);
@@ -300,13 +291,16 @@ export function createLightBind(options = {}) {
         // Update the virtual DOM node when input changes
         const vNode = instance.virtualDOM.nodeMap.get(element);
         if (vNode) {
-          vNode.value = isCheckboxOrRadio ? 
-            { type: element.type, value: element.value, checked: element.checked } : 
-            { type: element.type, value: element.value };
+          // Just use getValue directly since we imported it
+          vNode.value = { 
+            type: element.type || 'text', 
+            value: getValue(element),
+            checked: element.type === 'checkbox' || element.type === 'radio' ? element.checked : undefined
+          };
           vNode.isDirty = true;
         }
         
-        const currentValue = isCheckboxOrRadio ? element.checked : element.value;
+        const currentValue = getValue(element);
         
         if (currentValue === nodeBindings[`lastValue_${eventName}`]) {
           shouldProcessEvent = false;
@@ -324,7 +318,7 @@ export function createLightBind(options = {}) {
     };
     
     if (isInputControl && (eventName === 'input' || eventName === 'change')) {
-      nodeBindings[`lastValue_${eventName}`] = isCheckboxOrRadio ? element.checked : element.value;
+      nodeBindings[`lastValue_${eventName}`] = getValue(element);
     }
     
     element.addEventListener(eventName, handleEvent);
@@ -443,7 +437,13 @@ export function createLightBind(options = {}) {
       return false;
     };
     
-    component.watchers.push(specialWatcher);
+    // Using the registry instead of watchers array
+    if (!component.watcherRegistry) component.watcherRegistry = {};
+    if (!component.watcherRegistry['toggleVisible']) {
+      component.watcherRegistry['toggleVisible'] = [];
+    }
+    component.watcherRegistry['toggleVisible'].push(specialWatcher);
+    
     component.toggleVisibleWatcherCreated = true;
   }
   
@@ -504,10 +504,10 @@ export function createLightBind(options = {}) {
       element, 
       scope, 
       childComponents: [], 
-      watchers: [], 
       parent: parentComponent,
-      textBindings: new Map(),
       nodeBindings: new WeakMap(),
+      textNodeRegistry: {} ,
+      watcherRegistry: {},  // Initialize the registry
       
       // Component property management helper
       updateProperty: function(element, property, value) {
@@ -568,13 +568,8 @@ export function createLightBind(options = {}) {
         });
         this.childComponents = [];
         
-        // 2. Clean up all watchers
-        this.watchers.forEach(watcher => {
-          if (typeof watcher.unwatch === 'function') {
-            watcher.unwatch();
-          }
-        });
-        this.watchers = [];
+        // 2. Clean up all watchers through registry
+        this.watcherRegistry = {};
         
         // 3. Get all elements bound to this component
         const boundElements = getAllBoundElements(this);
@@ -603,9 +598,6 @@ export function createLightBind(options = {}) {
           // Remove element reference from component maps
           elementToComponent.delete(el);
         });
-        
-        // 5. Clean up text bindings
-        this.textBindings.clear();
         
         // 6. Clean up repeat markers if applicable
         if (this.isRepeatItem) {
@@ -711,10 +703,9 @@ export function createLightBind(options = {}) {
     
     // Process DOM 
     processElementAndChildren(element, component);
-    
-    if (instance.directives['bind-text']) {
-      instance.directives['bind-text'].process(element, '', component);
-    }
+
+    // Process text nodes through virtual DOM
+    instance.virtualDOM.processTextNodes(element, component);
     
     // Create virtual DOM node for this component
     instance.virtualDOM.createFromDOM(element, component);
@@ -746,14 +737,22 @@ export function createLightBind(options = {}) {
       element.classList.add('lb-initialized');
 
       setTimeout(() => {
-
-        component.watchers.forEach(watcher => {
-          try {
-            watcher();
-          } catch (e) {
-            log('error', 'Error running initial watcher:', e);
-          }
-        });
+        // Run all watchers from registry
+        if (component.watcherRegistry) {
+          const executed = new Set();
+          Object.values(component.watcherRegistry).forEach(callbacks => {
+            callbacks.forEach(callback => {
+              if (!executed.has(callback)) {
+                executed.add(callback);
+                try {
+                  callback();
+                } catch (e) {
+                  log('error', 'Error running initial watcher:', e);
+                }
+              }
+            });
+          });
+        }
 
         instance.digest(component);
       }, 0); // Allow DOM to settle
@@ -808,6 +807,82 @@ export function createLightBind(options = {}) {
   // Override the digest method
   instance.digest = digest;
   
+  // Add helper functions at the end
+  function triggerPropertyWatchers(component, propertyPath) {
+    if (!component || !component.watcherRegistry) return;
+    
+    const triggered = new Set(); // Avoid running same watcher twice
+    
+    // Check exact path and all parent paths
+    const parts = propertyPath.split('.');
+    let currentPath = '';
+    
+    for (let i = 0; i < parts.length; i++) {
+      currentPath = i === 0 ? parts[i] : `${currentPath}.${parts[i]}`;
+      
+      const callbacks = component.watcherRegistry[currentPath];
+      if (callbacks) {
+        callbacks.forEach(callback => {
+          if (!triggered.has(callback)) {
+            triggered.add(callback);
+            callback();
+          }
+        });
+      }
+    }
+    
+    // Also trigger watchers on child paths (e.g., changing 'user' affects 'user.name')
+    Object.keys(component.watcherRegistry).forEach(path => {
+      if (path.startsWith(propertyPath + '.')) {
+        const callbacks = component.watcherRegistry[path];
+        if (callbacks) {
+          callbacks.forEach(callback => {
+            if (!triggered.has(callback)) {
+              triggered.add(callback);
+              callback();
+            }
+          });
+        }
+      }
+    });
+
+    component.textNodeRegistry[currentPath].forEach(({ update }) => {
+      if (!triggered.has(update)) {
+        triggered.add(update);
+        update();
+      }
+    });
+  }
+
+  // Move setNestedProperty here from utils and add watcher triggering
+  function setNestedProperty(obj, path, value) {
+    try {
+      const parts = path.split('.');
+      const lastPart = parts.pop();
+      let current = obj;
+      
+      for (const part of parts) {
+        if (current[part] === undefined || current[part] === null) {
+          current[part] = {};
+        }
+        current = current[part];
+      }
+      
+      current[lastPart] = value;
+      
+      // Find component that owns this scope and trigger watchers
+      const component = instance.findComponentForScope(obj);
+      if (component) {
+        triggerPropertyWatchers(component, path);
+      }
+      
+      return true;
+    } catch (error) {
+      log('error', `Error setting nested property ${path}:`, error);
+      return false;
+    }
+  }
+  
   // Attach methods to instance
   Object.assign(instance, {
     setGlobals,
@@ -821,7 +896,9 @@ export function createLightBind(options = {}) {
     findDirectComponentForElement,
     setupToggleVisibleWatcher,
     findComponentForScope,
-    getAllBoundElements
+    getAllBoundElements,
+    triggerPropertyWatchers,
+    setNestedProperty
   });
   
   return instance;

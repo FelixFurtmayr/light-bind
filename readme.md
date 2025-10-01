@@ -29,6 +29,12 @@ Now visit: http://localhost:8000/example.html
 - diggest cycle after events?
 - animation
 
+## Build
+To buid the minified version run:
+
+> npm i # install dependencies
+> npm run build # build minified version with rollup
+
 
 ## Quick Start
 

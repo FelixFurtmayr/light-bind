@@ -1,6 +1,27 @@
 export function createDigestHandler(lightBind) {
   const log = (category, ...args) => lightBind.log(category, ...args);
 
+  // Helper function to extract property paths from expressions
+  function extractPropertyPaths(expression) {
+    const paths = new Set();
+    
+    // Match property access patterns like 'user.name' or 'items[0].value'
+    const regex = /\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*)/g;
+    const matches = expression.match(regex) || [];
+    
+    matches.forEach(match => {
+      const parts = match.split('.');
+      let currentPath = '';
+      
+      parts.forEach(part => {
+        currentPath = currentPath ? `${currentPath}.${part}` : part;
+        paths.add(currentPath);
+      });
+    });
+    
+    return Array.from(paths);
+  }
+
   return {
     digest,
     updateComponent,
@@ -8,7 +29,8 @@ export function createDigestHandler(lightBind) {
     createWatcher,
     renderComponent,
     destroyComponent,
-    updateComponentTree
+    updateComponentTree,
+    extractPropertyPaths
   };
 
   // Determine if component inputs have changed for onPush strategy
@@ -67,18 +89,26 @@ export function createDigestHandler(lightBind) {
     let watchersRun = 0;
     let changesDetected = 0;
     
-    log('debug', `Running ${component.watchers.length} watchers for component`);
+    if (!component.watcherRegistry) return { watchersRun, changesDetected };
     
-    const currentWatchers = [...component.watchers];
-    currentWatchers.forEach((watcher, index) => {
-      try {
-        watchersRun++;
-        const changed = watcher();
-        if (changed) changesDetected++;
-      } catch (error) {
-        log('error', `Error in watcher #${index}:`, error);
-      }
+    const executed = new Set(); // Avoid running same watcher twice
+    
+    Object.values(component.watcherRegistry).forEach(callbacks => {
+      callbacks.forEach(watcher => {
+        if (!executed.has(watcher)) {
+          executed.add(watcher);
+          try {
+            watchersRun++;
+            const changed = watcher();
+            if (changed) changesDetected++;
+          } catch (error) {
+            log('error', `Error in watcher:`, error);
+          }
+        }
+      });
     });
+    
+    log('debug', `Ran ${watchersRun} watchers for component, ${changesDetected} changes detected`);
     
     return { watchersRun, changesDetected };
   }
@@ -145,9 +175,13 @@ export function createDigestHandler(lightBind) {
     });
   }
 
-  // Update createWatcher function in core_digest.js
-
   function createWatcher(component, expression, callback) {
+    // Initialize registry if needed
+    if (!component.watcherRegistry) component.watcherRegistry = {};
+    
+    // Extract property paths from expression
+    const paths = extractPropertyPaths(expression);
+    
     let lastValue;
     let firstRun = true;
     
@@ -190,6 +224,17 @@ export function createDigestHandler(lightBind) {
       }
     };
     
+    // Register watcher on each path
+    paths.forEach(path => {
+      if (!component.watcherRegistry[path]) {
+        component.watcherRegistry[path] = [];
+      }
+      // Check if this exact callback already exists to avoid duplicates
+      if (!component.watcherRegistry[path].includes(checkForChanges)) {
+        component.watcherRegistry[path].push(checkForChanges);
+      }
+    });
+    
     // Run once to establish initial value
     try {
       checkForChanges();
@@ -198,14 +243,18 @@ export function createDigestHandler(lightBind) {
       log('error', `Error during initial watcher run for '${expression}':`, e);
     }
     
-    // Add to component watchers
-    component.watchers.push(checkForChanges);
-    
     return {
       expression,
       unwatch: () => {
-        const index = component.watchers.indexOf(checkForChanges);
-        if (index !== -1) component.watchers.splice(index, 1);
+        // Remove from registry
+        paths.forEach(path => {
+          if (component.watcherRegistry[path]) {
+            const index = component.watcherRegistry[path].indexOf(checkForChanges);
+            if (index !== -1) {
+              component.watcherRegistry[path].splice(index, 1);
+            }
+          }
+        });
       }
     };
   }
@@ -247,8 +296,8 @@ export function createDigestHandler(lightBind) {
     // Clean up virtual DOM
     lightBind.virtualDOM.cleanupComponent(component);
     
-    // Clear watchers
-    component.watchers = [];
+    // Clear watcher registry
+    component.watcherRegistry = {};
     
     // Recursively destroy children
     component.childComponents.forEach(destroyComponent);

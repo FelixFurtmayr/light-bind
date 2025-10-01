@@ -5,7 +5,6 @@ class BindRepeatDirective extends BaseDirective {
   proxyArrayMethods(array, component, arrayName) {
     if (!array || !Array.isArray(array) || array.__methodsProxied) return array;
     
-    // Array methods that modify the array structure
     const mutationMethods = ['splice', 'push', 'pop', 'shift', 'unshift', 'sort', 'reverse'];
     
     mutationMethods.forEach(method => {
@@ -30,33 +29,31 @@ class BindRepeatDirective extends BaseDirective {
     return array;
   }
 
-  // Helper to manually create a component 
-  createManualComponent(element, scope, parentComponent, index, arrayName) {
-    this.log('debug', `Creating manual component for index ${index}`);
+  // Helper to manually create a component with minimal overhead
+  createRepeatItemComponent(element, scope, parentComponent, index, repeatId) {
+    const self = this;
+    this.log('debug', `Creating repeat item component for index ${index}`);
     
-    return {
+    const component = {
       element,
       scope,
       bindings: [],
-      watchers: [],
+      watcherRegistry: {},
       childComponents: [],
       parent: parentComponent,
-      textBindings: new Map(),
       nodeBindings: new WeakMap(),
       isRepeatItem: true,
       repeatIndex: index,
-      repeatArray: arrayName,
+      repeatId: repeatId,
       elements: [element],
       
       updateProperty: function(element, property, value) {
-        // Initialize nodeBindings for this element if needed
         if (!this.nodeBindings.has(element)) {
           this.nodeBindings.set(element, {});
         }
         
         const bindings = this.nodeBindings.get(element);
         
-        // Track managed properties
         if (!bindings.managedProps) bindings.managedProps = {};
         bindings.managedProps[property] = value;
         
@@ -72,52 +69,67 @@ class BindRepeatDirective extends BaseDirective {
             element.value = value;
           } else if (element.tagName === 'SELECT') {
             element.value = value;
-            // Update selectedIndex if needed
-            for (let i = 0; i < element.options.length; i++) {
-              if (element.options[i].value === value) {
-                element.selectedIndex = i;
-                break;
-              }
-            }
           }
         } else if (property === 'checked' && element.tagName === 'INPUT') {
           element.checked = !!value;
         } else {
-          // Default - set as attribute
           element.setAttribute(property, value);
         }
         
-        return this; // For chaining
+        return this;
+      },
+      
+      destroy: function() {
+        if (this.parent && this.parent.childComponents) {
+          const index = this.parent.childComponents.indexOf(this);
+          if (index !== -1) {
+            this.parent.childComponents.splice(index, 1);
+          }
+        }
+        
+        self.lightBind.components.delete(this.element);
+        self.lightBind.elementToComponent.delete(this.element);
+        
+        if (self.lightBind.virtualDOM) {
+          self.lightBind.virtualDOM.cleanupComponent(this);
+        }
+        
+        this.watcherRegistry = {};
+        this.nodeBindings = new WeakMap();
       }
     };
+    
+    return component;
   }
 
   process(element, expression, component) {
     this.log('debug', `Starting bind-repeat for: ${expression}`);
     
-    const matchArray = expression.match(/^\s*(?:(\w+),\s*(\w+)\s+in\s+|\s*(\w+)\s+in\s+)(.+)$/);
-    const matchObject = expression.match(/^\s*\((\w+),\s*(\w+)\)\s+in\s+(.+)$/);
+    const matchArray = expression.match(/^\s*(?:(\w+),\s*(\w+)\s+in\s+|\s*(\w+)\s+in\s+)(.+?)(?:\s+track\s+by\s+(.+))?$/);
+    const matchObject = expression.match(/^\s*\((\w+),\s*(\w+)\)\s+in\s+(.+?)(?:\s+track\s+by\s+(.+))?$/);
     
     if (!matchArray && !matchObject) {
       this.log('error', `Invalid bind-repeat syntax: ${expression}`);
       return { success: false, skipChildren: false };
     }
     
-    let itemName, indexName, itemsExpr, isObjectIteration;
+    let itemName, indexName, itemsExpr, trackByExpr, isObjectIteration;
     
     if (matchArray) {
       itemName = matchArray[1] || matchArray[3];
       indexName = matchArray[2] || '$index';
       itemsExpr = matchArray[4];
+      trackByExpr = matchArray[5];
       isObjectIteration = false;
     } else {
       indexName = matchObject[1];
       itemName = matchObject[2];
       itemsExpr = matchObject[3];
+      trackByExpr = matchObject[4];
       isObjectIteration = true;
     }
     
-    this.log('debug', `Parsing: itemName=${itemName}, indexName=${indexName}, itemsExpr=${itemsExpr}`);
+    this.log('debug', `Parsing: itemName=${itemName}, indexName=${indexName}, itemsExpr=${itemsExpr}, trackBy=${trackByExpr}`);
     
     // Proxy array methods at initialization
     const arrayName = itemsExpr.trim();
@@ -128,8 +140,6 @@ class BindRepeatDirective extends BaseDirective {
     }
     
     const parent = element.parentNode;
-    const comment = document.createComment(`bind-repeat: ${expression}`);
-    
     const template = element.cloneNode(true);
     template.removeAttribute('bind-repeat');
     
@@ -139,325 +149,73 @@ class BindRepeatDirective extends BaseDirective {
     if (filterExpr) template.removeAttribute('filter');
     if (sortExpr) template.removeAttribute('sort');
     
-    parent.insertBefore(comment, element);
-    parent.removeChild(element);
-    
-    const instances = [];
-    const markers = { 
-      start: comment, 
-      template: template,
-      instances,
-      lastItems: null,
-      lastItemsKeys: null
+    // Store repeat info
+    const repeatId = `repeat_${Date.now()}_${Math.random()}`;
+    const repeatState = {
+      parent,
+      template,
+      instances: [], // Simple array of instances by index
+      element: element,
+      repeatId,
+      itemName,
+      indexName,
+      isObjectIteration
     };
     
-    this.lightBind.repeatMarkers.set(comment, markers);
+    // Remove original element
+    parent.removeChild(element);
+    
+    // Store reference on component for cleanup
+    if (!component._repeatStates) component._repeatStates = [];
+    component._repeatStates.push(repeatState);
     
     const watcher = this.lightBind.createWatcher(component, itemsExpr, (newItems) => {
       this.log('debug', `Watcher triggered for ${itemsExpr}: ${newItems ? (Array.isArray(newItems) ? newItems.length : 'not array') : 'undefined'} items`);
       
-      // Better handling of undefined or null values
+      // Handle undefined or null values
       if (newItems === undefined || newItems === null) {
         this.log('debug', `Warning: Expression "${itemsExpr}" returned ${newItems === undefined ? 'undefined' : 'null'}. Using empty array instead.`);
-        // Use an empty array instead of throwing an error
         newItems = [];
-        // Don't need to clean up instances immediately, as they might be populated later
-        // Just update the state
-        markers.lastItems = [];
-        markers.lastItemsKeys = '';
       }
       
-      if (isObjectIteration) {
-        if (typeof newItems !== 'object' || newItems === null) {
-          this.log('debug', `Warning: Expression "${itemsExpr}" must return an object for object iteration, got ${typeof newItems}. Using empty object.`);
-          newItems = {};
-        }
-      } else {
-        if (!Array.isArray(newItems)) {
-          this.log('debug', `Warning: Expression "${itemsExpr}" must return an array, got ${typeof newItems}. Converting to array.`);
-          // Try to convert to array if possible or use empty array
-          newItems = Array.isArray(newItems) ? newItems : 
-                    (newItems ? [newItems] : []);
-        }
-        
-        // Ensure new array also has proxy methods
-        this.proxyArrayMethods(newItems, component, arrayName);
-      }
+      let items;
       
-      if (isObjectIteration) {
-        if (typeof newItems !== 'object' || newItems === null) {
-          this.log('error', `Error: Expression "${itemsExpr}" must return an object, not ${typeof newItems}`);
-          this.cleanupInstances(instances);
-          instances.length = 0;
-          return { success: false, error: 'invalid_data_type' };
-        }
-      } else {
-        if (!Array.isArray(newItems)) {
-          this.log('error', `Error: Expression "${itemsExpr}" must return an array, not ${typeof newItems}`);
-          this.cleanupInstances(instances);
-          instances.length = 0;
-          return { success: false, error: 'invalid_data_type' };
-        }
-        
-        // Ensure new array also has proxy methods
-        this.proxyArrayMethods(newItems, component, arrayName);
-      }
-      
-      let entries = [];
-      
-      if (isObjectIteration) {
-        entries = Object.keys(newItems)
-          .filter(key => !key.startsWith('$'))
-          .map((key, index) => ({
-            __key: key,
-            __value: newItems[key],
-            __index: index,
-            __isObjectEntry: true
-          }));
-      } else {
-        entries = Array.isArray(newItems) ? [...newItems] : [];
-        // Log the array data for debugging
-        this.log('debug', `Array data: ${JSON.stringify(entries).substring(0, 100)}...`);
-      }
-      
-      if (filterExpr) {
-        entries = this.applyFilter(entries, filterExpr, component, isObjectIteration);
-      }
-      
-      if (sortExpr) {
-        entries = this.applySort(entries, sortExpr, component, isObjectIteration);
-      }
-      
-      const didEntriesChange = this.didEntriesChange(entries, markers.lastItems, markers.lastItemsKeys, isObjectIteration);
-      
-      if (!didEntriesChange) {
-        return { success: true, unchanged: true };
-      }
-      
-      markers.lastItems = [...entries];
-      markers.lastItemsKeys = this.generateEntriesKey(entries, isObjectIteration);
-      
-      if (entries.length === 0) {
-        this.cleanupInstances(instances);
-        return { success: true, isEmpty: true };
-      }
-      
-      const parentFunctions = {};
-      for (const key in component.scope) {
-        if (typeof component.scope[key] === 'function') {
-          parentFunctions[key] = component.scope[key];
-        }
-      }
-      
-      const newInstances = [];
-      const scopes = [];
-      const items = [];
-      
-      // Use document fragment for better performance
-      const fragment = document.createDocumentFragment();
-      
-      // Calculate if we should rebuild or update existing instances
-      const shouldRebuild = instances.length === 0 || 
-                        Math.abs(entries.length - instances.length) > entries.length * 0.3;
-      
-      if (shouldRebuild) {
-        this.cleanupInstances(instances);
-        instances.length = 0;
-      }
-      
-      let previousElement = null;
-      
-      entries.forEach((item, index) => {
-        let itemComponent, itemScope, clone;
-        
-        if (!shouldRebuild && index < instances.length) {
-          itemComponent = instances[index];
-          itemScope = itemComponent.scope;
-          clone = itemComponent.elements[0];
-          
-          if (isObjectIteration && item.__isObjectEntry) {
-            itemScope[indexName] = item.__key;
-            itemScope[itemName] = item.__value;
-            itemScope.$index = item.__index;
-          } else {
-            itemScope[itemName] = item;
-            itemScope[indexName] = index;
-            itemScope.$index = index;
-            itemScope.$first = index === 0;
-            itemScope.$last = index === entries.length - 1;
-          }
-          
-          this.log('debug', `Updated scope for item ${index}, $index=${itemScope.$index}, ${indexName}=${itemScope[indexName]}`);
-          
-          newInstances.push(itemComponent);
-          scopes.push(itemScope);
-          items.push(clone);
-          
-          if (shouldRebuild) {
-            fragment.appendChild(clone);
-          } else if (previousElement && clone.previousSibling !== previousElement) {
-            parent.insertBefore(clone, previousElement.nextSibling);
-          }
-          
-          previousElement = clone;
-          return;
-        }
-        
-        // Create new instance
-        itemScope = Object.create(component.scope);
-        
-        if (isObjectIteration && item.__isObjectEntry) {
-          itemScope[indexName] = item.__key;
-          itemScope[itemName] = item.__value;
-          itemScope.$index = item.__index;
-        } else {
-          itemScope[itemName] = item;
-          itemScope[indexName] = index;
-          itemScope.$index = index;
-          itemScope.$first = index === 0;
-          itemScope.$last = index === entries.length - 1;
-        }
-        
-        this.log('debug', `Created new scope for item ${index}, $index=${itemScope.$index}, ${indexName}=${itemScope[indexName]}`);
-
-        // For direct reference to bound variables
-        Object.defineProperty(itemScope, '__getBoundVars', {
-          value: function() { 
-            return {
-              $index: this.$index,
-              [indexName]: this[indexName],
-              [itemName]: this[itemName]
-            };
-          },
-          enumerable: false,
-          configurable: true
-        });
-        
-        // Define parent relationship
-        Object.defineProperties(itemScope, {
-          $parentComponent: {
-            value: component,
-            enumerable: false,
-            configurable: true
-          },
-          $parent: {
-            value: component.scope,
-            enumerable: false,
-            configurable: true
-          },
-          $sourceArray: {
-            value: arrayName,
-            enumerable: true,
-            configurable: true
-          }
-        });
-        
-        // Copy parent functions
-        for (const funcName in parentFunctions) {
-          itemScope[funcName] = parentFunctions[funcName];
-        }
-        
-        // Create clone of template
-        clone = template.cloneNode(true);
-        
-        // Handle auto-text for empty cells
-        const currentText = clone.textContent.trim();
-        
-        if (currentText === '' || (currentText.includes(':') && !clone.textContent.includes('{{'))) {
-          if (itemName === 'col' && itemsExpr === 'columns') {
-            clone.textContent = `{{${itemName}.name}}`;
-            this.log('debug', `Added {{${itemName}.name}} to header`);
-          } else if (isObjectIteration) {
-            clone.textContent = `{{${itemName}}}`;
-            this.log('debug', `Added {{${itemName}}} to cell`);
-          }
-        }
-              
-        const instance = {
-          scope: itemScope,
-          elements: [clone],
-          parentComponent: component
-        };
-        
-        newInstances.push(instance);
-        scopes.push(itemScope);
-        
-        if (shouldRebuild) {
-          fragment.appendChild(clone);
-        } else {
-          parent.insertBefore(clone, previousElement ? previousElement.nextSibling : comment.nextSibling);
-        }
-        previousElement = clone;
-        
-        // Create the component - for now using our manual method which is known to work
-        itemComponent = this.createManualComponent(clone, itemScope, component, index, arrayName);
-        
-        // Set up element reference in the scope
-        Object.defineProperty(itemScope, '$elem', {
-          value: clone,
-          enumerable: false,
-          configurable: true
-        });
-        
-        this.lightBind.components.set(clone, itemComponent);
-        this.lightBind.elementToComponent.set(clone, itemComponent);
-        
-        // Create a virtual DOM node for this element
-        if (this.lightBind.virtualDOM) {
-          this.lightBind.virtualDOM.createFromDOM(clone, itemComponent);
-        }
-        
-        this.lightBind.processElementAndChildren(clone, itemComponent);
-
-        if (this.lightBind.directives['bind-text']) {
-          this.lightBind.directives['bind-text'].process(clone, '', itemComponent);
-        }
-        
-        component.watchers.push(...itemComponent.watchers);
-        
-        items.push(clone);
-        
-        if (!component.__allItemScopes) component.__allItemScopes = [];
-        component.__allItemScopes.push(itemScope);
-      });
-      
-      // If using a document fragment, append it all at once
-      if (shouldRebuild && fragment.childNodes.length > 0) {
-        // Insert after the comment marker
-        if (comment.nextSibling) {
-          parent.insertBefore(fragment, comment.nextSibling);
-        } else {
-          parent.appendChild(fragment);
-        }
-      }
-      
-      // Clean up any extra instances
-      if (newInstances.length < instances.length) {
-        for (let i = newInstances.length; i < instances.length; i++) {
-          if (instances[i]) {
-            const elementsToRemove = instances[i].elements || [];
-            elementsToRemove.forEach(el => {
-              if (el && el.parentNode) {
-                el.parentNode.removeChild(el);
-              }
+      // Convert object to array if needed
+      if (isObjectIteration && typeof newItems === 'object' && !Array.isArray(newItems)) {
+        items = [];
+        for (const key in newItems) {
+          if (newItems.hasOwnProperty(key) && !key.startsWith('$')) {
+            items.push({
+              __key: key,
+              __value: newItems[key],
+              __isObjectEntry: true
             });
           }
         }
+      } else {
+        // Ensure it's an array
+        if (!Array.isArray(newItems)) {
+          this.log('debug', `Warning: Expression "${itemsExpr}" must return an array, got ${typeof newItems}. Converting to array.`);
+          items = Array.isArray(newItems) ? newItems : (newItems ? [newItems] : []);
+        } else {
+          items = newItems;
+        }
+        
+        // Ensure new array also has proxy methods
+        this.proxyArrayMethods(items, component, arrayName);
       }
       
-      instances.length = 0;
-      instances.push(...newInstances);
-      
-      if (!component.__repeatScopes) {
-        component.__repeatScopes = [];
+      // Apply filters and sorting
+      if (filterExpr) {
+        items = this.applyFilter(items, filterExpr, component, isObjectIteration);
       }
       
-      const oldScopes = component.__repeatScopes;
-      component.__repeatScopes = component.__repeatScopes.filter(s => 
-        !oldScopes.includes(s) || scopes.includes(s));
-      component.__repeatScopes.push(...scopes.filter(s => !component.__repeatScopes.includes(s)));
+      if (sortExpr) {
+        items = this.applySort(items, sortExpr, component, isObjectIteration);
+      }
       
-      this.log('debug', `Finished repeat update for ${itemsExpr}, created ${entries.length} items`);
+      // Perform efficient DOM update using index tracking
+      this.updateDOM(repeatState, items, component, itemName, indexName, isObjectIteration, arrayName);
       
       // Trigger a digest to ensure changes propagate
       if (this.lightBind.digest && typeof this.lightBind.digest === 'function') {
@@ -466,32 +224,145 @@ class BindRepeatDirective extends BaseDirective {
       
       return {
         success: true,
-        skipChildren: true,
-        scopes: scopes,
-        items: items
+        skipChildren: true
       };
     });
     
     return { success: true, skipChildren: true };
   }
+  
+  updateDOM(repeatState, items, component, itemName, indexName, isObjectIteration, arrayName) {
+    const { parent, template, instances } = repeatState;
+    const newLength = items.length;
+    const oldLength = instances.length;
     
-  generateEntriesKey(entries, isObjectIteration) {
-    if (isObjectIteration) {
-      return entries.map(item => `${item.__key}:${JSON.stringify(item.__value)}`).join('|');
-    } else {
-      try {
-        return JSON.stringify(entries);
-      } catch (e) {
-        return entries.length.toString();
+    // Update existing instances
+    const minLength = Math.min(newLength, oldLength);
+    for (let i = 0; i < minLength; i++) {
+      const instance = instances[i];
+      const item = items[i];
+      
+      // Update scope
+      this.updateItemScope(instance.component.scope, item, i, itemName, indexName, isObjectIteration, items.length);
+    }
+    
+    // Remove extra instances
+    if (oldLength > newLength) {
+      for (let i = oldLength - 1; i >= newLength; i--) {
+        const instance = instances[i];
+        if (instance.component && instance.component.destroy) {
+          instance.component.destroy();
+        }
+        if (instance.element && instance.element.parentNode) {
+          instance.element.parentNode.removeChild(instance.element);
+        }
+        instances.pop();
       }
+    }
+    
+    // Add new instances
+    if (newLength > oldLength) {
+      const fragment = document.createDocumentFragment();
+      
+      for (let i = oldLength; i < newLength; i++) {
+        const item = items[i];
+        const itemScope = this.createItemScope(component, item, i, itemName, indexName, isObjectIteration, arrayName, items.length);
+        
+        // Clone template
+        const clone = template.cloneNode(true);
+        
+        // Create component
+        const itemComponent = this.createRepeatItemComponent(clone, itemScope, component, i, repeatState.repeatId);
+        
+        // Set up component references
+        this.lightBind.components.set(clone, itemComponent);
+        this.lightBind.elementToComponent.set(clone, itemComponent);
+        component.childComponents.push(itemComponent);
+        
+        // Process bindings
+        this.lightBind.processElementAndChildren(clone, itemComponent);
+        
+        // Process text nodes
+        if (this.lightBind.virtualDOM) {
+          this.lightBind.virtualDOM.processTextNodes(clone, itemComponent, itemScope);
+        }
+        
+        // Store instance
+        instances.push({
+          element: clone,
+          component: itemComponent
+        });
+        
+        // Add to fragment
+        fragment.appendChild(clone);
+      }
+      
+      // Insert all new elements at once
+      parent.appendChild(fragment);
     }
   }
   
-  didEntriesChange(newEntries, lastEntries, lastEntriesKey, isObjectIteration) {
-    if (!lastEntries || !lastEntriesKey) return true;
-    if (newEntries.length !== lastEntries.length) return true;
-    const newKey = this.generateEntriesKey(newEntries, isObjectIteration);
-    return newKey !== lastEntriesKey;
+  createItemScope(component, item, index, itemName, indexName, isObjectIteration, arrayName, totalLength) {
+    const itemScope = Object.create(component.scope);
+    
+    if (isObjectIteration && item.__isObjectEntry) {
+      itemScope[indexName] = item.__key;
+      itemScope[itemName] = item.__value;
+      itemScope.$index = index;
+    } else {
+      itemScope[itemName] = item;
+      itemScope[indexName] = index;
+      itemScope.$index = index;
+    }
+    
+    // Add position helpers
+    itemScope.$first = index === 0;
+    itemScope.$last = index === totalLength - 1;
+    itemScope.$middle = !itemScope.$first && !itemScope.$last;
+    itemScope.$even = index % 2 === 0;
+    itemScope.$odd = !itemScope.$even;
+    
+    this.log('debug', `Created scope for item ${index}, $index=${itemScope.$index}, ${indexName}=${itemScope[indexName]}`);
+    
+    // Define parent relationship
+    Object.defineProperties(itemScope, {
+      $parentComponent: {
+        value: component,
+        enumerable: false,
+        configurable: true
+      },
+      $parent: {
+        value: component.scope,
+        enumerable: false,
+        configurable: true
+      },
+      $sourceArray: {
+        value: arrayName,
+        enumerable: true,
+        configurable: true
+      }
+    });
+    
+    return itemScope;
+  }
+  
+  updateItemScope(scope, item, index, itemName, indexName, isObjectIteration, totalLength) {
+    if (isObjectIteration && item.__isObjectEntry) {
+      scope[indexName] = item.__key;
+      scope[itemName] = item.__value;
+      scope.$index = index;
+    } else {
+      scope[itemName] = item;
+      scope[indexName] = index;
+      scope.$index = index;
+    }
+    
+    // Update position helpers
+    scope.$first = index === 0;
+    scope.$last = index === totalLength - 1;
+    scope.$middle = !scope.$first && !scope.$last;
+    scope.$even = index % 2 === 0;
+    scope.$odd = !scope.$even;
   }
   
   applyFilter(entries, filterExpr, component, isObjectIteration) {
@@ -521,7 +392,7 @@ class BindRepeatDirective extends BaseDirective {
             tempScope.item = item;
           }
           
-          return !!this.lightBind.evaluateWithScope(filterExpr, tempScope, { safeMode: true });
+          return !!this.lightBind.evaluateExpression(filterExpr, tempScope);
         } catch (error) {
           this.log('error', `Error evaluating filter expression: ${error.message}`);
           return true;
@@ -622,18 +493,6 @@ class BindRepeatDirective extends BaseDirective {
     }
     
     return result;
-  }
-  
-  cleanupInstances(instances) {
-    instances.forEach(instance => {
-      if (instance.elements) {
-        instance.elements.forEach(el => {
-          if (el && el.parentNode) {
-            el.parentNode.removeChild(el);
-          }
-        });
-      }
-    });
   }
 }
 

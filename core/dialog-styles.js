@@ -50,6 +50,11 @@ export const DIALOG_STYLES = `
   .dialog-large {
     width: 1200px;
   }
+
+  .dialog-xl {
+    width: 1600px;
+    max-width: calc(100vw - 32px);
+  }
   
   .dialog-fullscreen {
     width: calc(100vw - 32px);
@@ -156,10 +161,3 @@ export const DIALOG_STYLES = `
     }
   }
 `;
-
-export const SIZECLASSES = {
-  small: 'dialog-small',
-  medium: 'dialog-medium',
-  large: 'dialog-large',
-  fullscreen: 'dialog-fullscreen'
-};

@@ -31,17 +31,15 @@ class BindIfDirective extends BaseDirective {
           this.log('debug', 'Processing newly shown bind-if content');
           this.lightBind.processElementAndChildren(clone, component);
           
-          // Apply text binding directive to process text interpolation
-          if (this.lightBind.directives['bind-text']) {
-            this.log('debug', 'Processing text bindings in conditionally visible element');
-            this.lightBind.directives['bind-text'].process(clone, '', component);
-          }
+          // Process text nodes in the newly visible element
+          this.log('debug', 'Processing text bindings in conditionally visible element');
+          this.lightBind.virtualDOM.processTextNodes(clone, component);
           
           // Run a digest to update all bindings
           queueMicrotask(() => {
             this.lightBind.digest(component);
           });
-        } else {
+        }else {
           // Hide the element
           if (state.instance && state.instance.parentNode) {
             parent.removeChild(state.instance);

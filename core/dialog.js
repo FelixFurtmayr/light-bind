@@ -1,9 +1,9 @@
 // Import the styles from the separate file
-import { DIALOG_STYLES, SIZECLASSES } from './dialog-styles.js';
+import { DIALOG_STYLES } from './dialog-styles.js';
 
 // Confirm dialog template stored inline
 const CONFIRM_DIALOG_TEMPLATE = `
-<div class="dialog dialog-medium" bind-function="confirmDialog">
+<div class="dialog dialog-medium" bind-function="confirmDialog" style="padding: 10px;">
    <div>
       {{text}}
    </div>
@@ -29,15 +29,53 @@ export default function createDialogHandler(lightBind) {
     size: 'small',
     forceCloseButton: false,
     showCloseButton: true,
+    showHeader: true,
     animationDuration: 300
   };
 
+  function parseDialogConfig(html) {
+    // Check if html starts with dialog-config
+    const configMatch = html.match(/^\s*<dialog-config([^>]*)\/>\s*/i);
+
+    if (!configMatch) return { parsed: {}, html: html };
+    
+    let parsed = {}, match;
+    const attributesString = configMatch[1];
+    const attrRegex = /([a-z-]+)="([^"]*)"/gi;
+    
+    while ((match = attrRegex.exec(attributesString)) !== null) {
+      const key = match[1].replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      const value = match[2];
+      
+      if (key in DEFAULTOPTIONS) {
+        const expectedType = typeof DEFAULTOPTIONS[key];
+        
+        if (expectedType === 'boolean') {
+          parsed[key] = value === 'true';
+        } else if (expectedType === 'number') {
+          const num = parseInt(value);
+          if (isNaN(num)) {
+            console.warn(`Dialog config: '${key}' expects number, got '${value}'. Using default: ${DEFAULTOPTIONS[key]}`);
+          } else {
+            parsed[key] = num;
+          }
+        } else {
+          parsed[key] = value;
+        }
+      } else {
+        console.warn(`Dialog config: Unknown option '${key}'`);
+      }
+    }
+    
+    // Remove the dialog-config tag from html
+    const cleanHtml = html.substring(configMatch[0].length);
+    return { parsed, html: cleanHtml };
+  }
+
   function extractFirstFunction(scriptContent) {
     try {
-      // Trim whitespace to avoid issues with leading spaces
       const trimmedContent = scriptContent.trim();
       
-      // Find the first function declaration
       const functionMatch = /function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(([^)]*)\)\s*{/.exec(trimmedContent);
       
       if (!functionMatch) {
@@ -48,13 +86,11 @@ export default function createDialogHandler(lightBind) {
       const params = functionMatch[2].split(',').map(p => p.trim());
       const startIndex = functionMatch.index;
       
-      // Find the opening brace position
       const openingBracePos = trimmedContent.indexOf('{', startIndex);
       if (openingBracePos === -1) {
         throw new Error(`Opening brace not found for function '${functionName}'`);
       }
       
-      // Track braces to find the matching closing brace
       let braceCount = 1;
       let position = openingBracePos + 1;
       
@@ -72,7 +108,6 @@ export default function createDialogHandler(lightBind) {
         throw new Error(`Function '${functionName}' appears to be incomplete - missing closing brace`);
       }
       
-      // Extract the full function and its body
       const fullFunction = trimmedContent.substring(startIndex, position);
       const body = trimmedContent.substring(openingBracePos + 1, position - 1);
       
@@ -83,9 +118,8 @@ export default function createDialogHandler(lightBind) {
         fullFunction: fullFunction
       };
     } catch (error) {
-      // Add context to the error for better debugging
       if (error.message.includes('Function')) {
-        throw error; // Rethrow our custom errors
+        throw error;
       } else {
         throw new Error(`Error extracting function: ${error.message}`);
       }
@@ -114,7 +148,6 @@ export default function createDialogHandler(lightBind) {
     document.addEventListener('keydown', handleKeyDown);
     isInitialized = true;
     
-    // Register the confirmDialog function
     functionRegistry.set('confirm', function confirmDialog(data, { onSuccess, text }) {
       data.continue = function () {
         if (onSuccess) onSuccess();
@@ -123,7 +156,6 @@ export default function createDialogHandler(lightBind) {
       data.text = text || 'Are you sure you want to proceed?';
     });
     
-    // Cache the confirm dialog template
     templateCache.set('confirm', CONFIRM_DIALOG_TEMPLATE);
   }
 
@@ -135,22 +167,19 @@ export default function createDialogHandler(lightBind) {
     init();
     log('dialog', `Opening dialog: ${dialogName}`);
 
-    // Check if a dialog is already active, with exception for 'confirm' dialog
     if (activeDialog && dialogName !== 'confirm') {
       throw new Error(`Cannot open dialog '${dialogName}' while another dialog is active`);
     }
 
-    let dialogOptions = { ...DEFAULTOPTIONS };
+    let dynamicOptions = {};
     if (typeof optionsOrCallback === 'function') {
       callback = optionsOrCallback;
     } else {
-      dialogOptions = { ...dialogOptions, ...optionsOrCallback };
-      dialogOptions.sizeExplicitlySet = 'size' in optionsOrCallback;
+      dynamicOptions = optionsOrCallback;
     }
 
-    if (callback) dialogOptions.onSuccess = callback;
+    if (callback) dynamicOptions.onSuccess = callback;
 
-    // Save previous dialog if opening a confirm dialog
     let previousDialog = null;
     if (dialogName === 'confirm' && activeDialog) {
       previousDialog = activeDialog;
@@ -158,85 +187,91 @@ export default function createDialogHandler(lightBind) {
       closeDialogInternal();
     }
 
-    // Create container
-    const dialogContainer = document.createElement('div');
-    dialogContainer.className = `dialog-container ${SIZECLASSES[dialogOptions.size] || SIZECLASSES.small}`;
-    dialogContainer.dataset.dialogName = dialogName;
-    dialogContainer.dataset.forceClose = dialogOptions.forceCloseButton.toString();
-    
-    // Add higher z-index for confirm dialog if it's on top of another dialog
-    if (dialogName === 'confirm' && previousDialog) {
-      dialogContainer.style.zIndex = "9002"; // One higher than the standard
-    }
+    fetchDialogTemplate(dialogName)
+      .then(html => {
+        const { parsed: configOptions, html: cleanHtml } = parseDialogConfig(html);
+        const finalOptions = { ...DEFAULTOPTIONS, ...configOptions, ...dynamicOptions };
+        
+        // Auto-generate title if not provided
+        if (!finalOptions.title && !configOptions.title) {
+          finalOptions.title = dialogName.replace(/[-_/\\]/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+        }
 
-    // Create header if needed
-    if (dialogOptions.title || dialogOptions.showCloseButton) {
-      const dialogHeader = document.createElement('div');
-      dialogHeader.className = 'dialog-header';
+        const dialogContainer = document.createElement('div');
+        dialogContainer.className = `dialog-container dialog-${finalOptions.size || 'small'}`;
+        dialogContainer.dataset.dialogName = dialogName;
+        dialogContainer.dataset.forceClose = finalOptions.forceCloseButton.toString();
+        
+        if (dialogName === 'confirm' && previousDialog) {
+          dialogContainer.style.zIndex = "9002";
+        }
 
-      if (dialogOptions.title) {
-        const dialogTitle = document.createElement('h2');
-        dialogTitle.className = 'dialog-title';
-        dialogTitle.textContent = dialogOptions.title;
-        dialogHeader.appendChild(dialogTitle);
-      }
+        if (finalOptions.showHeader) {
+          const dialogHeader = document.createElement('div');
+          dialogHeader.className = 'dialog-header';
 
-      if (dialogOptions.showCloseButton) {
-        const closeButton = document.createElement('button');
-        closeButton.className = 'dialog-close-btn';
-        closeButton.innerHTML = '&times;';
-        closeButton.setAttribute('aria-label', 'Close dialog');
-        closeButton.addEventListener('click', () => close());
-        dialogHeader.appendChild(closeButton);
-      }
+          if (finalOptions.title) {
+            const dialogTitle = document.createElement('h2');
+            dialogTitle.className = 'dialog-title';
+            dialogTitle.textContent = finalOptions.title;
+            dialogHeader.appendChild(dialogTitle);
+          }
 
-      dialogContainer.appendChild(dialogHeader);
-    }
+          if (finalOptions.showCloseButton) {
+            const closeButton = document.createElement('button');
+            closeButton.className = 'dialog-close-btn';
+            closeButton.innerHTML = '&times;';
+            closeButton.setAttribute('aria-label', 'Close dialog');
+            closeButton.addEventListener('click', () => close());
+            dialogHeader.appendChild(closeButton);
+          }
 
-    // Create content
-    const dialogContent = document.createElement('div');
-    dialogContent.className = 'dialog-content';
-    dialogContent.innerHTML = '<div class="dialog-loading">Loading...</div>';
-    dialogContainer.appendChild(dialogContent);
+          dialogContainer.appendChild(dialogHeader);
+        }
 
-    // Show dialog
-    dialogOverlay.style.display = 'block';
-    document.body.appendChild(dialogContainer);
-    dialogOverlay.addEventListener('click', handleOverlayClick);
+        const dialogContent = document.createElement('div');
+        dialogContent.className = 'dialog-content';
+        dialogContainer.appendChild(dialogContent);
 
-    activeDialog = {
-      container: dialogContainer,
-      content: dialogContent,
-      name: dialogName,
-      options: dialogOptions,
-      resources: { js: [], css: [] },
-      component: null,
-      scope: {},
-      previousDialog: previousDialog
-    };
+        dialogOverlay.style.display = 'block';
+        document.body.appendChild(dialogContainer);
+        dialogOverlay.addEventListener('click', handleOverlayClick);
 
-    loadDialogContent(dialogName, dialogContent);
+        activeDialog = {
+          container: dialogContainer,
+          content: dialogContent,
+          name: dialogName,
+          options: finalOptions,
+          resources: { js: [], css: [] },
+          component: null,
+          scope: {},
+          previousDialog: previousDialog
+        };
 
-    // Animation
-    setTimeout(() => {
-      dialogOverlay.classList.add('dialog-overlay-visible');
-      dialogContainer.classList.add('dialog-container-visible');
-    }, 10);
+        processDialogContent(cleanHtml, dialogName, dialogContent);
 
-    // Focus management
-    setTimeout(() => {
-      dialogContainer.focus();
-      const focusable = dialogContainer.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      if (focusable) focusable.focus();
-    }, 50);
+        setTimeout(() => {
+          dialogOverlay.classList.add('dialog-overlay-visible');
+          dialogContainer.classList.add('dialog-container-visible');
+        }, 10);
 
-    return dialogContainer;
+        setTimeout(() => {
+          dialogContainer.focus();
+          const focusable = dialogContainer.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if (focusable) focusable.focus();
+        }, 50);
+      })
+      .catch(error => {
+        console.error('Failed to open dialog:', error);
+      });
+
+    return null;
   }
 
   function fetchDialogTemplate(dialogId) {
     const normalizedDialogId = dialogId.replace(/\\/g, '/');
     
-    // Special case for confirm dialog
     if (normalizedDialogId === 'confirm') {
       return Promise.resolve(templateCache.get('confirm'));
     }
@@ -250,7 +285,6 @@ export default function createDialogHandler(lightBind) {
       `${lightBind.dialogsPath}/${normalizedDialogId}.html`
     ];
     
-    // Try paths sequentially
     return tryNextPath(0);
     
     function tryNextPath(index) {
@@ -272,91 +306,24 @@ export default function createDialogHandler(lightBind) {
     }
   }
 
-  function loadDialogContent(dialogId, contentElement) {
-    fetchDialogTemplate(dialogId)
-      .then(html => {
-        if (html) {
-          processDialogTemplate(html, dialogId, contentElement);
-        } else {
-          contentElement.innerHTML = `<div class="dialog-error">Failed to load dialog: ${dialogId}</div>`;
-        }
-      })
-      .catch(error => {
-        contentElement.innerHTML = `<div class="dialog-error">Error loading dialog: ${error.message}</div>`;
-      });
-  }
-  
-  function processDialogTemplate(html, dialogId, contentElement) {
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html.trim();
+  function processDialogContent(html, dialogId, contentElement) {
+    contentElement.innerHTML = html;
     
-    processDialogTitle(tempDiv, dialogId);
-    processDialogSize(tempDiv);
-    
-    // Set content
-    contentElement.innerHTML = tempDiv.innerHTML;
-    
-    // Process resources
     const normalizedDialogId = dialogId.replace(/\\/g, '/');
     const basePath = getDialogPath(normalizedDialogId);
     
     const cssPromises = processCss(dialogId, contentElement, basePath);
     const jsPromises = processJs(dialogId, contentElement, basePath);
     
-    // Initialize after resources load
     Promise.all([...cssPromises, ...jsPromises])
       .then(() => initializeLightBind(dialogId, contentElement))
-      .catch(() => initializeLightBind(dialogId, contentElement)); // Still initialize on error
-  }
-
-  function processDialogTitle(tempDiv, dialogId) {
-    const titleElement = tempDiv.querySelector('title');
-    if (titleElement && titleElement.textContent && !activeDialog.options.title) {
-      setDialogTitle(titleElement.textContent.trim());
-      titleElement.parentNode.removeChild(titleElement);
-    } else if (!activeDialog.options.title) {
-      const autoTitle = dialogId.replace(/[-_/\\]/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase());
-      setDialogTitle(autoTitle);
-    }
-  }
-
-  function setDialogTitle(title) {
-    const headerEl = activeDialog.container.querySelector('.dialog-header');
-    if (headerEl) {
-      const titleEl = headerEl.querySelector('.dialog-title');
-      if (titleEl) {
-        titleEl.textContent = title;
-      } else {
-        const newTitleEl = document.createElement('h2');
-        newTitleEl.className = 'dialog-title';
-        newTitleEl.textContent = title;
-        headerEl.insertBefore(newTitleEl, headerEl.firstChild);
-      }
-    }
-  }
-
-  function processDialogSize(tempDiv) {
-    const rootElement = tempDiv.querySelector('.dialog');
-    if (rootElement && rootElement.classList && !activeDialog.options.sizeExplicitlySet) {
-      const sizeClass = Array.from(rootElement.classList).find(cls =>
-        ['dialog-small', 'dialog-medium', 'dialog-large', 'dialog-fullscreen'].includes(cls)
-      );
-
-      if (sizeClass) {
-        Object.values(SIZECLASSES).forEach(cls => {
-          activeDialog.container.classList.remove(cls);
-        });
-        activeDialog.container.classList.add(sizeClass);
-      }
-    }
+      .catch(() => initializeLightBind(dialogId, contentElement));
   }
 
   function processCss(dialogId, contentElement, basePath) {
     const promises = [];
     let stylesFound = false;
     
-    // Helper to add style to head
     function addStyle(css, source) {
       const style = document.createElement('style');
       style.textContent = css;
@@ -367,14 +334,12 @@ export default function createDialogHandler(lightBind) {
       return style;
     }
     
-    // Process embedded styles
     const embeddedStyles = contentElement.querySelectorAll('style');
     if (embeddedStyles.length > 0) {
       stylesFound = true;
       embeddedStyles.forEach((styleEl, i) => addStyle(styleEl.textContent, `embedded-${i}`));
     }
     
-    // Process link tags
     const linkElements = contentElement.querySelectorAll('link[rel="stylesheet"]');
     if (linkElements.length > 0) {
       stylesFound = true;
@@ -391,7 +356,6 @@ export default function createDialogHandler(lightBind) {
       });
     }
     
-    // Try external CSS if no styles found
     if (!stylesFound) {
       promises.push(
         fetch(`${basePath}/style.css`)
@@ -408,12 +372,10 @@ export default function createDialogHandler(lightBind) {
     const promises = [];
     let scriptsFound = false;
     
-    // Skip JS processing for confirm dialog as it's already registered
     if (dialogId === 'confirm') {
       return promises;
     }
     
-    // Process inline scripts
     const inlineScripts = contentElement.querySelectorAll('script:not([src])');
     if (inlineScripts.length > 0) {
       scriptsFound = true;
@@ -425,7 +387,6 @@ export default function createDialogHandler(lightBind) {
       });
     }
     
-    // Process external scripts
     const srcScripts = contentElement.querySelectorAll('script[src]');
     if (srcScripts.length > 0) {
       scriptsFound = true;
@@ -443,7 +404,6 @@ export default function createDialogHandler(lightBind) {
       });
     }
     
-    // Try external JS if no scripts found
     if (!scriptsFound) {
       promises.push(
         fetch(`${basePath}/script.js`)
@@ -460,9 +420,8 @@ export default function createDialogHandler(lightBind) {
     try {
       const extracted = extractFirstFunction(js);
       if (extracted) {
-        // Instead of creating with new Function, evaluate the entire function
-        // This preserves the destructuring syntax
-        const fn = eval(`(${extracted.fullFunction})`);
+        // const fn = eval(`(${extracted.fullFunction})`);
+        const fn = new Function('return (' + extracted.fullFunction + ')')();
         functionRegistry.set(dialogId, fn);
       }
     } catch (error) {
@@ -480,34 +439,28 @@ export default function createDialogHandler(lightBind) {
       const component = lightBind.initializeComponent(element, dialogFunction, activeDialog.options);
       if (!component || !component.scope || !activeDialog) return null;
       
-      // Add helper methods
       component.scope.closeDialog = (result) => close(result);
       component.scope.getDialogContainer = () => activeDialog.container;
       component.scope.getDialogOptions = () => activeDialog.options;
       
-      // Store references
       activeDialog.scope = component.scope;
       activeDialog.component = component;
       
       return component;
     }
     
-    // Find binding elements
     const bindElements = contentElement.querySelectorAll('[bind-function]');
     let component = null;
     
     if (bindElements.length === 0) {
-      // Use dialog root if no bind-function elements
       const dialogRoot = contentElement.querySelector('.dialog') || contentElement;
       const bindFunctionName = `dialog_${dialogId.replace(/[^a-zA-Z0-9]/g, '_')}`;
       dialogRoot.setAttribute('bind-function', bindFunctionName);
       component = setupComponent(dialogRoot);
     } else {
-      // Use first bind-function element
       component = setupComponent(bindElements[0]);
     }
     
-    // Trigger digest
     if (component) {
       setTimeout(() => {
         try {
@@ -548,42 +501,29 @@ export default function createDialogHandler(lightBind) {
   function closeDialogInternal() {
     if (!activeDialog) return;
 
-    // Check if this is a confirm dialog and there's a previous dialog to restore
     const isConfirm = activeDialog.name === 'confirm';
-    const previousDialog = isConfirm ? activeDialog.previousDialog : null;
+    const previousDialog = isConfirm ? activeDialog.previousDialog : false;
 
-    // Start animation
     activeDialog.container.classList.remove('dialog-container-visible');
-    
-    // Only remove overlay visibility if not restoring a previous dialog
-    if (!previousDialog) {
-      dialogOverlay.classList.remove('dialog-overlay-visible');
-    }
 
-    // Cleanup after animation
-    setTimeout(() => {
-      // Remove container
-      if (activeDialog.container && activeDialog.container.parentNode) {
+     if (activeDialog.container && activeDialog.container.parentNode) {
         activeDialog.container.parentNode.removeChild(activeDialog.container);
       }
 
-      // Clean up resources
       [...activeDialog.resources.js, ...activeDialog.resources.css].forEach(resource => {
         if (resource && resource.parentNode) {
           resource.parentNode.removeChild(resource);
         }
       });
 
-      // If no previous dialog to restore, remove event listeners and hide overlay
       if (!previousDialog) {
+        dialogOverlay.classList.remove('dialog-overlay-visible');
         dialogOverlay.removeEventListener('click', handleOverlayClick);
         dialogOverlay.style.display = 'none';
         activeDialog = null;
       } else {
-        // Restore previous dialog
         activeDialog = previousDialog;
       }
-    }, activeDialog.options.animationDuration);
   }
 
   function handleKeyDown(event) {
@@ -602,13 +542,11 @@ export default function createDialogHandler(lightBind) {
     functionRegistry.clear();
   }
 
-  // Add a convenience method for confirm dialogs
   function confirm(text, onSuccess) {
     return open('confirm', { text, onSuccess });
   }
 
   init();
 
-  // Public API
   return { open, close, clearCache, confirm };
 }

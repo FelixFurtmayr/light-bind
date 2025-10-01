@@ -1,78 +1,49 @@
-// core_virtual_dom.js
-// Simplified Virtual DOM implementation for LightBind focusing on form elements
-
+import { getFormElementState, isFormElement, shouldUpdateFormElement, updateFormBinding } from './core_inputs.js';
 import { VirtualNode } from './core_virtual_node.js';
 
-// Create virtual DOM manager
 export function createVirtualDOM(lightBind) {
   const vdom = {
-    nodeMap: new WeakMap(),       // Maps DOM nodes to virtual nodes
-    componentMap: new Map(),      // Maps components to their root virtual nodes
+    nodeMap: new WeakMap(),
+    componentMap: new Map(),
+    textNodeMap: new Map(), // Changed to Map to support forEach
   };
   
-  // Only create virtual nodes for component roots and form elements
   vdom.createFromDOM = function(element, component) {
-    if (!element) return null;
-    
-    // Check if node already exists
-    if (vdom.nodeMap.has(element)) {
+    if (!element || vdom.nodeMap.has(element)) {
       return vdom.nodeMap.get(element);
     }
     
     let vNode = null;
     
-    // Create a node for the root component element
     if (component && element === component.element) {
-      vNode = VirtualNode.create({
-        element, 
-        component,
-        scope: component.scope
-      });
+      vNode = VirtualNode.create({ element, component, scope: component.scope });
       vdom.nodeMap.set(element, vNode);
       vdom.componentMap.set(component, vNode);
-    }
-    // Create nodes for form elements
-    else if (isFormElement(element)) {
-      vNode = VirtualNode.create({
-        element, 
-        component,
-        scope: component.scope
-      });
+    } else if (isFormElement(element)) {
+      vNode = VirtualNode.create({ element, component, scope: component.scope });
       vdom.nodeMap.set(element, vNode);
     }
     
-    // For other elements, search the children recursively for form elements
-    if (element.children && element.children.length > 0) {
-      Array.from(element.children).forEach(child => {
-        vdom.createFromDOM(child, component);
-      });
+    if (element.children?.length > 0) {
+      Array.from(element.children).forEach(child => vdom.createFromDOM(child, component));
     }
     
     return vNode;
   };
   
-  // Update to focus on form value changes
   vdom.updateComponent = function(component) {
     if (!component) return;
     
-    // Find all form elements in this component
     component.element.querySelectorAll('input, select, textarea').forEach(elem => {
-      // Get or create virtual node for this form element
       let vNode = vdom.nodeMap.get(elem);
       if (!vNode) {
-        vNode = VirtualNode.create({
-          element: elem, 
-          component,
-          scope: component.scope
-        });
+        vNode = VirtualNode.create({ element: elem, component, scope: component.scope });
         vdom.nodeMap.set(elem, vNode);
       }
       
-      // Check if form value has changed
       const oldValue = vNode.value || {};
-      const newValue = VirtualNode.getElementValue(elem);
+      const newValue = getFormElementState(elem);
       
-      // Mark as dirty if changed
       if (!lightBind.isEqual(oldValue, newValue)) {
         vNode.value = newValue;
         vNode.isDirty = true;
@@ -80,85 +51,187 @@ export function createVirtualDOM(lightBind) {
     });
   };
   
-  
-  // Apply changes - focus on form elements
   vdom.applyChanges = function() {
-    // Update each component's form elements
+    // Process component form elements
     vdom.componentMap.forEach((rootNode, component) => {
-      if (!component || !component.element) return;
+      if (!component?.element) return;
       
-      // Find all form elements and update if dirty
       component.element.querySelectorAll('input, select, textarea').forEach(element => {
         const node = vdom.nodeMap.get(element);
-        if (node && node.isDirty) {
+        if (node?.isDirty) {
           VirtualNode.applyToDom(node);
           
-          // Update scope bindings if needed
-          if (node.value && node.component) {
-            updateBindings(node, element);
+          if (node.value && node.component && shouldUpdateFormElement(element, node.component)) {
+            updateFormBinding(element, node.component.scope);
           }
         }
       });
     });
+    
+    // Process text nodes
+    vdom.textNodeMap.forEach((vNode, textNode) => {
+      if (vNode.isDirty) {
+        VirtualNode.applyToDom(vNode);
+      }
+    });
   };
   
-  // Helper to update scope from form element
-  function updateBindings(node, element) {
-    const bindAttr = element.getAttribute('bind');
-    if (!bindAttr || !node.component || !node.component.scope) return;
-    
-    // Skip if explicitly managed by a directive
-    const nodeBindings = node.component.nodeBindings.get(element);
-    if (nodeBindings?.managedProps?.value !== undefined) return;
-    
-    if (element.type === 'checkbox' || element.type === 'radio') {
-      node.component.scope[bindAttr] = element.checked;
-    } else {
-      node.component.scope[bindAttr] = element.value;
-    }
-  }
-  
-  // Helper to check if element is a form element
-  function isFormElement(element) {
-    return element && element.tagName && 
-           ['INPUT', 'SELECT', 'TEXTAREA'].includes(element.tagName);
-  }
-  
-  // Get a virtual node for an element
   vdom.getVirtualNode = function(element) {
     return vdom.nodeMap.get(element);
   };
+  
+  vdom.processTextNodes = function(element, component) {
+    if (!element || !component) return;
+    
+    const processNode = (node) => {
+      if (node.nodeType === Node.TEXT_NODE && node.nodeValue.includes('{{')) {
+        const parts = lightBind.parseInterpolatedString(node.nodeValue);
+        
+        if (parts.some(p => p.expression)) {
+          const textData = {
+            originalValue: node.nodeValue,
+            parts: parts,
+            lastValue: null
+          };
+          
+          const vNode = VirtualNode.create({
+            element: node,
+            type: 'text',
+            component: component,
+            scope: component.scope,
+            textData: textData
+          });
+          
+          vdom.textNodeMap.set(node, vNode);
+          
+          // Create update function
+          const updateText = () => {
+            let newText = '';
+            
+            parts.forEach(part => {
+              if (part.expression) {
+                const value = lightBind.evaluateExpression(part.text, component.scope);
+                let displayValue = '';
+                
+                if (value === null) {
+                  displayValue = 'null';
+                } else if (value === undefined) {
+                  displayValue = '';
+                } else if (typeof value === 'object') {
+                  try {
+                    displayValue = JSON.stringify(value);
+                  } catch (e) {
+                    displayValue = String(value);
+                  }
+                } else {
+                  displayValue = String(value);
+                }
+                
+                newText += displayValue;
+              } else {
+                newText += part.text;
+              }
+            });
+            
+            if (vNode.value.lastValue !== newText) {
+              vNode.value.lastValue = newText;
+              vNode.isDirty = true;
+              // Apply immediately on first run
+              if (vNode.value.lastValue !== null) {
+                node.nodeValue = newText;
+              }
+            }
+          };
+          
+          // Set up watchers
+          // text nodes - not working for now
+          // parts.filter(p => p.expression).forEach(part => {
+          //   const deps = lightBind.extractPropertyPaths(part.text);
+            
+          //   deps.forEach(path => {
+          //     if (!component.textNodeRegistry) component.textNodeRegistry = {};
+          //     if (!component.textNodeRegistry[path]) {
+          //       component.textNodeRegistry[path] = [];
+          //     }
+          //     component.textNodeRegistry[path].push({
+          //       node: node,
+          //       vNode: vNode,
+          //       update: updateText
+          //     });
+          //   });
+          // });
+
+           parts.filter(p => p.expression).forEach(part => {
+            lightBind.createWatcher(component, part.text, updateText);
+          });
+          
+          // Initial update
+          updateText();
+          // Force immediate update on initialization
+          if (vNode.isDirty && vNode.value.lastValue !== null) {
+            node.nodeValue = vNode.value.lastValue;
+            vNode.isDirty = false;
+          }
+        }
+      }
+    };
+    
+    // Process all text nodes in element
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: (node) => {
+          // Skip if parent has child-handling directives
+          const parent = node.parentElement;
+          if (parent && hasChildHandlingDirective(parent)) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        }
+      }
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      processNode(node);
+    }
+  };
+  
+  function hasChildHandlingDirective(element) {
+    const childHandlingDirectives = ['bind-if', 'bind-repeat', 'bind-component', 'bind-html'];
+    return Array.from(element.attributes || []).some(attr => 
+      childHandlingDirectives.includes(attr.name)
+    );
+  }
 
   vdom.cleanupComponent = function(component) {
     if (!component) return;
     
-    // Clean up component in the component map
     vdom.componentMap.delete(component);
     
-    // Since nodeMap is a WeakMap without forEach, we can't iterate directly
-    // Instead, we need to find and clean elements from the DOM
-    
-    // Start with the component's root element
     if (component.element) {
       vdom.nodeMap.delete(component.element);
       
-      // If the component has elements array (like in repeat directives)
-      if (component.elements && Array.isArray(component.elements)) {
-        component.elements.forEach(element => {
-          if (element) vdom.nodeMap.delete(element);
-        });
-      }
+      component.elements?.forEach(element => {
+        if (element) vdom.nodeMap.delete(element);
+      });
       
-      // Clean up all form elements within this component
-      if (component.element.querySelectorAll) {
-        const formElements = component.element.querySelectorAll('input, select, textarea');
-        formElements.forEach(element => {
-          vdom.nodeMap.delete(element);
-        });
+      component.element.querySelectorAll?.('input, select, textarea').forEach(element => {
+        vdom.nodeMap.delete(element);
+      });
+      
+      // Clean up text nodes
+      const walker = document.createTreeWalker(
+        component.element,
+        NodeFilter.SHOW_TEXT
+      );
+      let node;
+      while (node = walker.nextNode()) {
+        vdom.textNodeMap.delete(node);
       }
     }
   };
-  
   
   return vdom;
 }

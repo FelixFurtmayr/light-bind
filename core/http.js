@@ -163,7 +163,18 @@ export default function (options, lightBind) {
     // GET: put data the query, so we can pass a JSON in the same way like for a post 
     // Only it should be small to not make the URL too long - otherwise we have to do a post
     if ((method === 'GET') && data) {
-      let urlParams = new URLSearchParams(data);
+      // Convert objects to JSON strings before URL encoding
+      const processedData = {};
+      for (const key in data) {
+        const value = data[key];
+        if (typeof value === 'object' && value !== null) {
+          processedData[key] = JSON.stringify(value);
+        } else {
+          processedData[key] = value;
+        }
+      }
+      
+      let urlParams = new URLSearchParams(processedData);
       let params = urlParams.toString();
       if (params) url = url + '?' + params;
       headers['Content-Type'] = 'application/json';
@@ -217,18 +228,47 @@ export default function (options, lightBind) {
               throw error;
             });
           }
-          return response.text(); // Convert response to text for parsing
+          
+          // Handle response based on responseType or Content-Type
+          const contentType = response.headers.get('content-type') || '';
+          const responseType = data.responseType;
+          
+          // If responseType is specified, use it
+          if (responseType === 'blob') {
+            return response.blob();
+          } else if (responseType === 'arraybuffer') {
+            return response.arrayBuffer();
+          } else if (responseType === 'text') {
+            return response.text();
+          }
+          
+          // Auto-detect based on Content-Type
+          if (contentType.includes('application/octet-stream') ||
+              contentType.includes('application/pdf') ||
+              contentType.includes('application/zip') ||
+              contentType.includes('application/vnd.ms-excel') ||
+              contentType.includes('application/vnd.openxmlformats') ||
+              contentType.includes('image/') ||
+              contentType.includes('video/') ||
+              contentType.includes('audio/')) {
+            return response.blob();
+          }
+          
+          // Default to text for JSON, HTML, plain text, etc.
+          return response.text();
         })
-        .then(function (text) {
+        .then(function (result) {
           refreshUI(); // Refresh UI after processing
 
-          // Attempt to parse JSON, fallback to text if parsing fails
-          let result;
-          try {
-            result = JSON.parse(text);
-          } catch (e) {
-            result = text;
+          // If result is text, try to parse as JSON
+          if (typeof result === 'string') {
+            try {
+              result = JSON.parse(result);
+            } catch (e) {
+              // Keep as text if JSON parsing fails
+            }
           }
+          // If result is blob or arraybuffer, keep as is
 
           if (callback) callback(null, result);
           resolve(result);
@@ -289,13 +329,13 @@ export default function (options, lightBind) {
         if (file[key]) headers[key] = file[key];
       });
 
-      headers.filename = sanitizeFilenameForHTTP(headers.filename);
-      headers.shortName = sanitizeFilenameForHTTP(headers.shortName);
-
       console.log('postFile: file should be a Blob, but got:', headers);
 
       file = new Blob([file.content], {  type: headers.mimetype || 'application/octet-stream' });
     }
+
+    if (headers.filename) headers.filename = sanitizeFilenameForHTTP(headers.filename);
+    if (headers.shortName) headers.shortName = sanitizeFilenameForHTTP(headers.shortName);
 
     // Apply processRequest to headers before creating FormData
     // Create a request-like object that processRequest can modify
@@ -439,15 +479,15 @@ export default function (options, lightBind) {
       .replace(/[()<>@,;:\\"\/\[\]?={}]/g, '')
       // Replace spaces with underscores (optional, but recommended)
       .replace(/\s+/g, '_')
+      // Replace other spaces with a single underscore
+      .replace(/[\s\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+/g, '_')
       // Remove any non-ASCII characters (optional, for maximum compatibility)
       .replace(/[^\x20-\x7E]/g, '')
       // Remove leading/trailing dots and spaces
       .replace(/^[\s.]+|[\s.]+$/g, '');
     
     // Ensure the filename isn't empty after sanitization
-    if (!sanitized) {
-      sanitized = 'unnamed';
-    }
+    if (!sanitized) sanitized = 'unnamed';
     
     // Limit length (optional, but good practice)
     const maxLength = 255 - ext.length;
@@ -461,4 +501,3 @@ export default function (options, lightBind) {
 
   return http;
 };
-

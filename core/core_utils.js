@@ -82,23 +82,21 @@ export function getNestedProperty(obj, path) {
   }
 }
 
-export function setNestedProperty(obj, path, value) {
-  try {
-    const parts = path.split('.');
-    const lastPart = parts.pop();
-    let current = obj;
-    
-    for (const part of parts) {
-      if (current[part] === undefined || current[part] === null) {
-        current[part] = {};
-      }
-      current = current[part];
-    }
-    
-    current[lastPart] = value;
-    return true;
-  } catch (error) {
-    console.error(`Error setting nested property ${path}:`, error);
-    return false;
-  }
+
+// https://techoverflow.net/2018/03/30/copying-strings-to-the-clipboard-using-pure-javascript/
+export function copyToClipboard (str) {
+  // Create new element
+  var el = document.createElement('textarea');
+  // Set value (string to be copied)
+  el.value = str;
+  // Set non-editable to avoid focus and move outside of view
+  el.setAttribute('readonly', '');
+  el.style = {position: 'absolute', left: '-9999px'};
+  document.body.appendChild(el);
+  // Select text inside element
+  el.select();
+  // Copy text to clipboard
+  document.execCommand('copy');
+  // Remove temporary element
+  document.body.removeChild(el);
 }
