@@ -2,6 +2,10 @@
   "name": "light-bind",
   "version": "0.7.0",
   "type": "module",
+  "author": {
+    "name": "Felix Furtmayr",
+    "email": "ff@hipersa.com"
+  },
   "description": "A minimalistic data binding library for JavaScript",
   "devDependencies": {
     "@rollup/plugin-terser": "^0.4.4",

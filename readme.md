@@ -1,5 +1,5 @@
 # LightBind
-LightBind is a minimalist JavaScript framework that binds html and js seamless and provides basic functionality. The developer can focus on creating optimized content for his application.
+A minimalist JS framework to bind html and js and provide UI basic like drag&drop or dialogs. The developer shall focus on creating optimized content for his application.
 
 ## Live Demo
 https://felixfurtmayr.github.io/light-bind/example.html
