@@ -56,7 +56,7 @@ dialog.close({ success: true, id: 123 });
 
 ```
 
-### Dialog Template (/dialogs/confirm-delete.html)
+### Dialog Template (/dialog/confirm-delete.html)
 
 ```html
 <div class="dialog" bind-function="initDialog">

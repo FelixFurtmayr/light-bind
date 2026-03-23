@@ -37,8 +37,8 @@ export function createLightBind(options = {}) {
   const elementToComponent = new WeakMap();
   const debug = options.debug || false;
   let digestScheduled = false;
-  const dialogsPath = options.dialogsPath || '../dialogs';
-  const componentsPath = options.componentsPath || '../components';
+  const dialogsPath = options.dialogsPath || '/dialog';
+  const componentsPath = options.componentsPath || '/components';
   let _initialized = false;
   
   // Create private log function

@@ -20,8 +20,8 @@
 
    // other paths for components and dialogs
    const lightBind = new LightBind({
-      componentsPath: '../components',
-      dialogsPath: '../dialogs'
+      componentsPath: '/component',
+      dialogsPath: '/dialog'
    });
 
    // take what you need: set globals manually instead of lightBind.setGlobals();
