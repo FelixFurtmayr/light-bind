@@ -6,8 +6,8 @@
 <!-- Text input -->
 <input bind="username" placeholder="Enter username">
 
-<!-- Number input -->
-<input type="number" bind="quantity">
+<!-- Number input debounced with 500ms -->
+<input type="number" bind="quantity" debounce="500">
 
 <!-- Checkbox -->
 <input type="checkbox" bind="isActive">

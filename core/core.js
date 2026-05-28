@@ -274,55 +274,81 @@ export function createLightBind(options = {}) {
     if (!component.nodeBindings.has(element)) {
       component.nodeBindings.set(element, {});
     }
-    
+
     const nodeBindings = component.nodeBindings.get(element);
     const eventKey = `event_${eventName}_${expression}`;
-    
+
     if (nodeBindings[eventKey]) return;
-    
+
     const isInputControl = (element.tagName === 'INPUT' || element.tagName === 'SELECT' || element.tagName === 'TEXTAREA');
-    const isCheckboxOrRadio = isInputControl && (element.type === 'checkbox' || element.type === 'radio');
     const elementOwnerComponent = findDirectComponentForElement(element);
-    
-    const handleEvent = (event) => {
-      let shouldProcessEvent = true;
-      
-      if ((eventName === 'input' || eventName === 'change') && isInputControl) {
-        // Update the virtual DOM node when input changes
+
+    // Debounce setup — works for any element, any event
+    const debounceAttr = element.getAttribute('debounce');
+    const debounceDelay = debounceAttr !== null ? (parseInt(debounceAttr, 10) || 2000) : 0;
+    let debounceTimer = null;
+
+    // Two-way binding setup — if element has a bind attribute
+    const bindExpression = element.getAttribute('bind');
+    const isTwoWayBinding = isInputControl && bindExpression;
+
+    function applyEvent(event) {
+      // Two-way binding: DOM → Scope
+      if (isTwoWayBinding) {
+        const newVal = getValue(element);
+
+        // Update virtual DOM node
         const vNode = instance.virtualDOM.nodeMap.get(element);
         if (vNode) {
-          // Just use getValue directly since we imported it
-          vNode.value = { 
-            type: element.type || 'text', 
-            value: getValue(element),
+          vNode.value = {
+            type: element.type || 'text',
+            value: newVal,
             checked: element.type === 'checkbox' || element.type === 'radio' ? element.checked : undefined
           };
           vNode.isDirty = true;
         }
-        
-        const currentValue = getValue(element);
-        
-        if (currentValue === nodeBindings[`lastValue_${eventName}`]) {
-          shouldProcessEvent = false;
-        } else {
-          nodeBindings[`lastValue_${eventName}`] = currentValue;
-        }
+
+        // Skip if value hasn't changed
+        if (newVal === nodeBindings[`lastValue_${eventName}`]) return;
+        nodeBindings[`lastValue_${eventName}`] = newVal;
+
+        instance.setNestedProperty((elementOwnerComponent || component).scope, bindExpression, newVal);
       }
-      
-      if (shouldProcessEvent) {
+
+      // Execute the on-* expression if present
+      if (expression) {
         const componentScope = (elementOwnerComponent || component).scope;
         componentScope.$event = event;
         instance.parseEventHandler(expression, componentScope, event);
-        instance.digest(elementOwnerComponent || component);
+      }
+
+      instance.digest(elementOwnerComponent || component);
+    }
+
+    const handleEvent = (event) => {
+      if (debounceDelay === 0) {
+        applyEvent(event);
+      } else {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => applyEvent(event), debounceDelay);
       }
     };
-    
+
     if (isInputControl && (eventName === 'input' || eventName === 'change')) {
       nodeBindings[`lastValue_${eventName}`] = getValue(element);
     }
-    
+
     element.addEventListener(eventName, handleEvent);
     nodeBindings[eventKey] = handleEvent;
+
+    // special case: listen for input events also when there is a change event
+    if (eventName === 'change' && isTwoWayBinding) {
+      const inputKey = `event_input_null`;
+      if (!nodeBindings[inputKey]) {
+        element.addEventListener('input', handleEvent);
+        nodeBindings[inputKey] = handleEvent;
+      }
+    }
   }
   
   function processElementAndChildren(element, component, skipChildren = false) {
