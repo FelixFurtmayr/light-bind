@@ -34,33 +34,39 @@
 ## bind-repeat
 
 ```html
-<!-- Basic array iteration -->
-<ul>
-  <li bind-repeat="item in items">{{item.name}}</li>
-</ul>
+<!-- Basic -->
+<li bind-repeat="item in items">{{item.name}}</li>
 
 <!-- With index -->
-<ul>
-  <li bind-repeat="(index, item) in items">
-    {{index + 1}}. {{item.name}}
-  </li>
-</ul>
+<li bind-repeat="index, item in items">{{index + 1}}. {{item.name}}</li>
 
 <!-- Object iteration -->
-<dl>
-  <div bind-repeat="(key, value) in userObject">
-    <dt>{{key}}</dt>
-    <dd>{{value}}</dd>
-  </div>
-</dl>
+<div bind-repeat="(key, value) in userObject">{{key}}: {{value}}</div>
 
-<!-- With filtering and sorting -->
-<ul>
-  <li bind-repeat="item in items" filter="activeItemsOnly" sort="sortByName">
-    {{item.name}}
-  </li>
-</ul>
+<!-- Filter + sort (function name or inline field syntax) -->
+<li bind-repeat="item in items" filter="activeItemsOnly" sort="sortByName">{{item.name}}</li>
+<li bind-repeat="item in items" sort="name: 1, age: -2">{{item.name}}</li>
+
+<!-- Position helpers -->
+<li bind-repeat="item in items" bind-class="{ even: $even, last: $last }">
+  {{$index + 1}}. {{item.name}}
+</li>
 ```
+
+Position helpers available on each item: `$index`, `$first`, `$last`, `$middle`, `$even`, `$odd`.
+
+```javascript
+function ListComponent(scope) {
+  scope.items = [{ name: 'Alice', age: 30, active: true }, { name: 'Bob', age: 25, active: false }];
+
+  scope.activeItemsOnly = (item) => item.active === true;     // filter function
+  scope.sortByName = (a, b) => a.name.localeCompare(b.name); // sort comparator
+  scope.sortCriteria = { name: 1, age: -2 };                 // sort object: positive = asc, negative = desc, value = priority
+}
+```
+
+Array mutations (`push`, `splice`, `sort`, ...) trigger re-render automatically. 
+To replace the array use `scope.$render({ items: newItems })` or `scope.items = newItems; scope.$refresh()`.
 
 ```javascript
 function ListComponent(scope) {
