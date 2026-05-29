@@ -43,9 +43,9 @@
 <!-- Object iteration -->
 <div bind-repeat="(key, value) in userObject">{{key}}: {{value}}</div>
 
-<!-- Filter + sort (function name or inline field syntax) -->
+<!-- Filter + sort -->
 <li bind-repeat="item in items" filter="activeItemsOnly" sort="sortByName">{{item.name}}</li>
-<li bind-repeat="item in items" sort="name: 1, age: -2">{{item.name}}</li>
+<li bind-repeat="item in items" sort="{ name: 1, age: -2 }">{{item.name}}</li>
 
 <!-- Position helpers -->
 <li bind-repeat="item in items" bind-class="{ even: $even, last: $last }">
@@ -68,12 +68,6 @@ function ListComponent(scope) {
 Array mutations (`push`, `splice`, `sort`, ...) trigger re-render automatically. 
 To replace the array use `scope.$render({ items: newItems })` or `scope.items = newItems; scope.$refresh()`.
 
-```javascript
-function ListComponent(scope) {
-  scope.activeItemsOnly = (item) => item.active === true;
-  scope.sortByName = (a, b) => a.name.localeCompare(b.name);
-}
-```
 
 ## bind-attr
 

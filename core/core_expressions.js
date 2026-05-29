@@ -5,9 +5,7 @@ export function createExpressionHandler(lightBind) {
   const expressionCache = new Map();
 
   return {
-    parseCondition,
     parseEventHandler,
-    executeExpression,
     parseAttributeBindings,
     preprocessStrings,
     extractVariableNames,
@@ -113,12 +111,6 @@ export function createExpressionHandler(lightBind) {
         const func = new Function('scope', `
           try {
             with(scope) {
-              // Add safety checks for common undefined errors
-              const safeAccess = (obj, prop) => obj && obj[prop];
-              
-              // Extract potential object accesses to initialize safely
-              ${extractPotentialObjects(processedExpr)}
-              
               return ${processedExpr};
             }
           } catch(e) {
@@ -151,35 +143,6 @@ export function createExpressionHandler(lightBind) {
     } catch (error) {
       log('error', `Error evaluating expression '${expression}':`, error);
       return '';
-    }
-  }
-
-  // Helper to extract potential object chains and generate initialization code
-  function extractPotentialObjects(expr) {
-    // Find potential object chains (e.g., "user.profile.name")
-    const objPattern = /\b([a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)+)\b/g;
-    const matches = expr.match(objPattern) || [];
-    const uniqueMatches = [...new Set(matches)];
-    
-    // Generate variable initialization code
-    return uniqueMatches.map(match => {
-      const parts = match.split('.');
-      const root = parts[0];
-      
-      // Build initialization
-      return `
-        // Initialize ${match} safely
-        let _${root}_exists = typeof ${root} !== 'undefined' && ${root} !== null;
-      `;
-    }).join('');
-  }
-
-  function parseCondition(expression, scope) {
-    try {
-      return !!evaluateExpression(preprocessStrings(expression), scope);
-    } catch (error) {
-      log('error', `Error parsing condition '${expression}':`, error);
-      return false;
     }
   }
 
@@ -239,58 +202,6 @@ export function createExpressionHandler(lightBind) {
       return hasChanges || true;
     } catch (error) {
       log('error', `Error parsing event handler '${expression}':`, error);
-      return false;
-    }
-  }
-
-  function executeExpression(expression, eventScope, originalScope = null) {
-    try {
-      // Get variable names to track
-      const potentialVars = Object.keys(eventScope)
-        .filter(key => typeof key === 'string' && key !== '$event' && !key.startsWith(')'));
-      
-      // Create tracking code for variables
-      const trackingCode = potentialVars.map(varName => 
-        `const _original_${varName} = ${varName};\n`
-      ).join('');
-      
-      // Create collection code to gather changed variables
-      const collectionCode = `return {
-        ${potentialVars.map(varName => 
-           `'${varName}': (typeof ${varName} !== 'undefined' && ${varName} !== _original_${varName}) ? ${varName} : undefined`
-        ).join(',\n')}
-      }`;
-      
-      // Execute expression and collect changes
-      const func = new Function('scope', 'event', `
-        try {
-          with(scope) {
-            ${trackingCode}
-            ${expression};
-            ${collectionCode}
-          }
-        } catch(e) {
-          console.error("Error executing expression:", e);
-          throw e;
-        }
-      `);
-      
-      const changedValues = func(eventScope, eventScope.$event);
-      
-      // Apply changes to original scope if provided
-      let hasChanges = false;
-      if (originalScope) {
-        Object.entries(changedValues || {}).forEach(([key, value]) => {
-          if (value !== undefined && originalScope[key] !== value) {
-            originalScope[key] = value;
-            hasChanges = true;
-          }
-        });
-      }
-      
-      return hasChanges || true;
-    } catch (error) {
-      log('error', `Failed to execute expression: ${expression}`, error);
       return false;
     }
   }
@@ -396,7 +307,7 @@ export function createExpressionHandler(lightBind) {
 
   // for external usage: parse a string with expression within a given scope
   function parseExpression(text, scope) {
-    console.log('parseExpression', text, scope);
+    // console.log('parseExpression', text, scope);
     try {
       text = text || '';
       const parts = parseInterpolatedString(text);

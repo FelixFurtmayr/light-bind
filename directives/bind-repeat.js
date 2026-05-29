@@ -196,13 +196,11 @@ class BindRepeatDirective extends BaseDirective {
         // Ensure it's an array
         if (!Array.isArray(newItems)) {
           this.log('debug', `Warning: Expression "${itemsExpr}" must return an array, got ${typeof newItems}. Converting to array.`);
-          items = Array.isArray(newItems) ? newItems : (newItems ? [newItems] : []);
+          items = newItems ? [newItems] : [];
         } else {
           items = newItems;
         }
-        
-        // Ensure new array also has proxy methods
-        this.proxyArrayMethods(items, component, arrayName);
+
       }
       
       // Apply filters and sorting
@@ -216,16 +214,6 @@ class BindRepeatDirective extends BaseDirective {
       
       // Perform efficient DOM update using index tracking
       this.updateDOM(repeatState, items, component, itemName, indexName, isObjectIteration, arrayName);
-      
-      // Trigger a digest to ensure changes propagate
-      if (this.lightBind.digest && typeof this.lightBind.digest === 'function') {
-        setTimeout(() => this.lightBind.digest(component), 0);
-      }
-      
-      return {
-        success: true,
-        skipChildren: true
-      };
     });
     
     return { success: true, skipChildren: true };
@@ -366,51 +354,39 @@ class BindRepeatDirective extends BaseDirective {
   }
   
   applyFilter(entries, filterExpr, component, isObjectIteration) {
-    if (typeof component.scope[filterExpr] === 'function') {
-      return entries.filter(item => {
-        try {
-          if (isObjectIteration && item.__isObjectEntry) {
-            return !!component.scope[filterExpr](item.__value, item.__key);
-          } else {
-            return !!component.scope[filterExpr](item);
-          }
-        } catch (error) {
-          this.log('error', `Error executing filter function: ${error.message}`);
-          return true;
+    return entries.filter(item => {
+      try {
+        const itemScope = Object.create(component.scope);
+        if (isObjectIteration && item.__isObjectEntry) {
+          itemScope.key = item.__key;
+          itemScope.value = item.__value;
+          itemScope.item = item.__value;
+        } else {
+          itemScope.item = item;
         }
-      });
-    } else {
-      return entries.filter(item => {
-        try {
-          const tempScope = { ...component.scope };
-          
-          if (isObjectIteration && item.__isObjectEntry) {
-            tempScope.key = item.__key;
-            tempScope.value = item.__value;
-            tempScope.item = item.__value;
-          } else {
-            tempScope.item = item;
-          }
-          
-          return !!this.lightBind.evaluateExpression(filterExpr, tempScope);
-        } catch (error) {
-          this.log('error', `Error evaluating filter expression: ${error.message}`);
-          return true;
+        const result = this.lightBind.evaluateExpression(filterExpr, itemScope);
+        if (typeof result === 'function') {
+          return !!(isObjectIteration && item.__isObjectEntry ? result(item.__value, item.__key) : result(item));
         }
-      });
-    }
+        return !!result;
+      } catch (error) {
+        this.log('error', `Error evaluating filter expression: ${error.message}`);
+        return true;
+      }
+    });
   }
   
   applySort(entries, sortExpr, component, isObjectIteration) {
     const itemsToSort = [...entries];
+    const sortVal = this.lightBind.evaluateExpression(sortExpr, component.scope);
     
-    if (typeof component.scope[sortExpr] === 'function') {
+    if (typeof sortVal === 'function') {
       return itemsToSort.sort((a, b) => {
         try {
           if (isObjectIteration) {
-            return component.scope[sortExpr](a.__value, b.__value, a.__key, b.__key);
+            return sortVal(a.__value, b.__value, a.__key, b.__key);
           } else {
-            return component.scope[sortExpr](a, b);
+            return sortVal(a, b);
           }
         } catch (error) {
           this.log('error', `Error executing sort function: ${error.message}`);
@@ -419,24 +395,12 @@ class BindRepeatDirective extends BaseDirective {
       });
     }
     
-    if (typeof component.scope[sortExpr] === 'object' && component.scope[sortExpr] !== null) {
+    if (typeof sortVal === 'object' && sortVal !== null) {
       return itemsToSort.sort((a, b) => {
         return this.compareByCriteria(
           isObjectIteration ? a.__value : a,
           isObjectIteration ? b.__value : b,
-          component.scope[sortExpr]
-        );
-      });
-    }
-    
-    const sortCriteria = this.parseSortCriteria(sortExpr);
-    
-    if (Object.keys(sortCriteria).length > 0) {
-      return itemsToSort.sort((a, b) => {
-        return this.compareByCriteria(
-          isObjectIteration ? a.__value : a,
-          isObjectIteration ? b.__value : b,
-          sortCriteria
+          sortVal
         );
       });
     }
@@ -472,28 +436,7 @@ class BindRepeatDirective extends BaseDirective {
     return 0;
   }
   
-  parseSortCriteria(criteriaString) {
-    const result = {};
-    
-    try {
-      const parts = criteriaString.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
-      
-      for (const part of parts) {
-        const [key, value] = part.split(':').map(s => s.trim());
-        
-        if (key && value) {
-          const numValue = parseInt(value, 10);
-          if (!isNaN(numValue)) {
-            result[key] = numValue;
-          }
-        }
-      }
-    } catch (error) {
-      this.log('error', `Error parsing sort criteria: ${error.message}`);
-    }
-    
-    return result;
-  }
+
 }
 
 export { BindRepeatDirective };
