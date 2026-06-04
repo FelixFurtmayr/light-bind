@@ -723,31 +723,10 @@ export function createLightBind(options = {}) {
     Array.from(element.attributes || []).forEach(attr => {
       attrs[attr.name] = attr.value;
     });
-    
-    // Set component strategy
-    component.strategy = element.getAttribute('bind-strategy') || 'default';
-    
-    // Process DOM 
-    processElementAndChildren(element, component);
-
-    // Process text nodes through virtual DOM
-    instance.virtualDOM.processTextNodes(element, component);
-    
-    // Create virtual DOM node for this component
-    instance.virtualDOM.createFromDOM(element, component);
-
-    // if an input with a forbidden name is found, log a warning and rename it
-    inputs = inputs || {};
-    ['elem', 'attrs', 'bindings'].forEach(prop => {
-      if (inputs[prop] ) {
-        console.warn(`LightBind: Input property '${prop}' is reserved and will be renamed to '_${prop}'`);
-        inputs['_' + prop] = inputs[prop];
-        delete inputs[prop];
-      }
-    });
-      
-    // Call the bind function with basic information
+          
     try {
+
+      // Call the bind function with basic information
       bindFunction(scope, {
         elem: element,
         attrs: attrs,
@@ -755,6 +734,28 @@ export function createLightBind(options = {}) {
         ...inputs
       });
       
+      // Set component strategy
+      component.strategy = element.getAttribute('bind-strategy') || 'default';
+      
+      // Process DOM 
+      processElementAndChildren(element, component);
+
+      // Process text nodes through virtual DOM
+      instance.virtualDOM.processTextNodes(element, component);
+      
+      // Create virtual DOM node for this component
+      instance.virtualDOM.createFromDOM(element, component);
+
+      // if an input with a forbidden name is found, log a warning and rename it
+      inputs = inputs || {};
+      ['elem', 'attrs', 'bindings'].forEach(prop => {
+        if (inputs[prop] ) {
+          console.warn(`LightBind: Input property '${prop}' is reserved and will be renamed to '_${prop}'`);
+          inputs['_' + prop] = inputs[prop];
+          delete inputs[prop];
+        }
+      });
+    
       // Call the $onInit hook if defined
       if (typeof scope.$onInit === 'function') {
         scope.$onInit();
@@ -872,6 +873,7 @@ export function createLightBind(options = {}) {
       }
     });
 
+    component.textNodeRegistry[currentPath] = component.textNodeRegistry[currentPath] || [];
     component.textNodeRegistry[currentPath].forEach(({ update }) => {
       if (!triggered.has(update)) {
         triggered.add(update);
