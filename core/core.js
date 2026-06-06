@@ -116,7 +116,7 @@ export function createLightBind(options = {}) {
   
   function setGlobals() {
     const globals = {
-      LightBind: instance,
+      lightBind: instance,
       storage: instance.storage,
       http: instance.http,
       dialog: instance.dialog,

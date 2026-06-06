@@ -1,14 +1,9 @@
 # LightBind start
 
-## Standard
+## minimal
 
 ```html
-<script type="module">
-  import { LightBind } from './lightbind.js';
-   lightBind = new LightBind();
-   lightBind.setGlobals();
-   lightBind.start();
-</script>
+<script type="module">import { LightBind } from './lightbind.js'; new LightBind().setGlobals().start(); </script>
 
 ```
 
@@ -16,7 +11,17 @@
 
 ```html
 <script type="module">
-  import { LightBind } from './lightbind.js';
+   import { LightBind } from './lightbind.js';
+   let lightbind = new LightBind({ setHeaderTokenFromStorage: true });
+   lightBind.setGlobals();
+   lightBind.start();
+</script>
+
+```
+
+```html
+<script type="module">
+   import { LightBind } from './lightbind.js';
 
    // other paths for components and dialogs
    const lightBind = new LightBind({
@@ -25,7 +30,7 @@
    });
 
    // take what you need: set globals manually instead of lightBind.setGlobals();
-   window.LightBind = lightBind;
+   window.lightBind = lightBind;
    window.http = lightBind.http;
    window.notification = lightBind.notification;
    window.dialog = lightBind.dialog;

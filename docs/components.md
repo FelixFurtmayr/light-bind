@@ -162,7 +162,7 @@ function UserCard(scope, input) {
 }
 </script>
 ```
-
+setGlobals
 ### Using Components
 
 ```html

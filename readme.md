@@ -19,10 +19,9 @@ Now visit: http://localhost:8000/example.html
 
 # Todo
 - debugging:
-   - make html parser more robuse for dynamic attrs like form[item.id]
+   - make html parser more robust for dynamic attrs like form[item.id]
    - debugging: error, if problem within main function crashes, because currently nothing happens
 - performance updates: initial load + repeat (compile the html directly)
-- make startup process more robust in all variants
 
 ## low prio
 - css grid? icons?
@@ -42,16 +41,13 @@ To buid the minified version run:
 ## Quick Start
 
 ```html
-<script type="module">
-  import { LightBind } from './lightbind.js';
-   lightBind = new LightBind();
-   lightBind.setGlobals();
-   lightBind.start();
-</script>
+<script type="module">import { LightBind } from './lightbind.js'; new LightBind().start();</script>
+
 <div bind-function="CounterApp">
   <h1>{{title}}</h1>
   <button on-click="increment()">Count: {{count}}</button>
 </div>
+
 <script>
 function CounterApp(scope) {
   scope.title = 'Simple Counter';
