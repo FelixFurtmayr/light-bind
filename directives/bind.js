@@ -1,4 +1,4 @@
-import { setValue } from '../core/core_inputs.js';
+import { getEventType, getValue, setValue } from '../core/core_inputs.js';
 import { BaseDirective } from './base-directive.js';
 
 class BindDirective extends BaseDirective {
@@ -16,8 +16,8 @@ class BindDirective extends BaseDirective {
       return { success: false };
     }
 
+    // 1. Setup Scope → DOM (Watcher)
     log('dom', `Setting up two-way binding for ${element.tagName} with "${expression}"`);
-
     function updateValue(newValue) {
       try {
         log('debug', 'updateValue called:', expression, 'value:', newValue);
@@ -34,6 +34,16 @@ class BindDirective extends BaseDirective {
     updateValue(initialValue);
 
     this.lightBind.createWatcher(component, expression, updateValue);
+
+
+    // 2. Setup DOM → Scope (Event-Listener)
+    const eventType = getEventType(element);   
+    element.addEventListener(eventType, (event) => {
+      const newVal = getValue(element);
+      self.lightBind.setNestedProperty(component.scope, expression, newVal);
+      self.lightBind.digest(component);
+    });
+
 
     element.__lb_two_way_binding = true;
     log('dom', `Two-way binding established for "${expression}"`);
