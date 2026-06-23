@@ -59,6 +59,10 @@ dialog.close({ success: true, id: 123 });
 ### Dialog Template (/dialog/confirm-delete.html)
 
 ```html
+
+<!-- dialog options here in this tag, if wanted: -->
+<dialog-config size="xl" show-header="false" force-close-button="true" />
+
 <div class="dialog" bind-function="initDialog">
   <p>Are you sure you want to delete this item?</p>
   <div class="dialog-actions">
@@ -67,10 +71,11 @@ dialog.close({ success: true, id: 123 });
   </div>
 </div>
 <script>
-function initDialog(scope, input, html) {
-  scope.confirm = () => {
-   input.onSuccess();
-   closeDialog();
+function ConfirmDelete(scope, params) {
+  const onSuccess = params.onSuccess || (() => {});
+  scope.confirm = function () {
+    onSuccess();
+    scope.closeDialog('confirmed');
   };
 }
 </script>
@@ -78,6 +83,68 @@ function initDialog(scope, input, html) {
    .dialog-actions{}
 </style>
 ```
+
+#### opening a dialog
+
+Info: the dialog can also have style.css and script.js separate as files, but in the simplest for all is just put into template.html
+
+
+```js
+  dialog.open('admin/edit-workflow', function () {}, { });
+
+  dialog.open('admin/edit-workflow', { options}, function  (){
+
+  });
+
+  // special short term - very useful to confirm a delete
+  dialog.confirm('Should the box be white?', function () {}, { });
+
+  dialog.open('user-edit', {
+    userId: 123,
+    mode: 'edit',
+  }, result => {
+    if (result) refreshList();
+  });
+
+
+  // example of how to use the success function with the dialog to return something
+  function UserEdit(scope, params) {
+    const onSuccess = params.onSuccess || (() => {});
+    const user      = params.data || {};   // your custom data lives under params.data
+
+    scope.userId = user.id;
+    scope.mode   = params.mode;  // or any other key passed directly
+
+    scope.btnClick = function (){
+       onSuccess({ text: 'btn clicked' });
+    };
+
+  }
+
+```
+
+
+#### dialog options
+```html
+<dialog-config
+  size="medium"
+  show-header="true"
+  show-close-button="true"
+  force-close-button="false"
+  animation-duration="300"
+/>
+```
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `size` | string | `small` | `small` / `medium` / `large` / `xl` / `fullscreen` |
+| `show-header` | bool | `true` | Show the dialog header bar with title and close button |
+| `show-close-button` | bool | `true` | Show the × close button in the header |
+| `force-close-button` | bool | `false` | If true, clicking overlay or pressing Escape does NOT close – only the close button does |
+| `animation-duration` | number | `300` | Open/close animation in milliseconds |
+
+`title` can be passed via `dialog.open` options at runtime and overrides any auto-generated title.
+
 
 ## Notification System
 
