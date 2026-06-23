@@ -69,6 +69,8 @@ class BindRepeatDirective extends BaseDirective {
             element.value = value;
           } else if (element.tagName === 'SELECT') {
             element.value = value;
+          } else { // for example on a options element
+            element.setAttribute(property, value);
           }
         } else if (property === 'checked' && element.tagName === 'INPUT') {
           element.checked = !!value;
