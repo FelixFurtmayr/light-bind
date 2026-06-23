@@ -18,6 +18,7 @@
   <option value="2">Option 2</option>
 </select>
 
+<!-- Select from a list of objects -->
 <select bind="selectedOption">
   <option bind-repeat="opt in options" value="{{opt.value}}">{{opt.label}}</option>
 </select>```
