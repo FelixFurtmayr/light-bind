@@ -17,7 +17,10 @@
   <option value="1">Option 1</option>
   <option value="2">Option 2</option>
 </select>
-```
+
+<select bind="selectedOption">
+  <option bind-repeat="opt in options" value="{{opt.value}}">{{opt.label}}</option>
+</select>```
 
 ## bind-if
 
