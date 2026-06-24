@@ -36,6 +36,39 @@ http.put('users/123', userData);
 http.delete('users/123');
 ```
 
+## File Upload
+
+```javascript
+
+// send a file
+http.postFiles('file', blob);
+
+// file + json data
+http.postFiles('file', blob, { order_id, item_id, slot, side });
+
+// send Multiple files via FormData and allow attach an optional json for more info as file too
+http.postFiles('file', [
+  { blob: coverBlob, filename: 'front_cover.jpg', mimetype: 'image/jpeg' },
+  { blob: audioBlob, filename: 'song.mp3', mimetype: 'audio/mpeg', title: 'My Song' }
+], {
+  order_id: 'abc123',
+  item_id:  'uuid',
+  slot:     'cover',
+  side:     'front'
+});
+
+// Listen to upload progress
+const stop = http.onUploadProgress('file', ({ percentComplete }) => {
+  console.log(percentComplete + '%');
+});
+stop(); // unsubscribe
+```
+
+Server receives:
+- `json` → `{ data: { order_id, ... }, files: [{ filename, mimetype, ... }] }`
+- `file` → binary blobs in same order as `files[]`
+
+
 
 ## Dialog System
 

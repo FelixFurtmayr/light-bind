@@ -97,7 +97,8 @@ export default function (options, lightBind) {
     return httpToApi('POST', url, data, callback);
   };
 
-  http.postFile = postFile;
+  http.postFile  = postFile;
+  http.postFiles = postFiles;
 
   http.put = function (url, data, callback) {
     return httpToApi('PUT', url, data, callback);
@@ -360,99 +361,7 @@ export default function (options, lightBind) {
     // Add the file to FormData
     formData.append('file', file, headers.filename || 'file');
 
-    // Create XHR for progress tracking
-    const xhr = new XMLHttpRequest();
-
-    // Create progress bar elements if showprogress is enabled
-    let progressBarContainer, progressBar;
-    if (options.showprogress) {
-      progressBarContainer = document.createElement('div');
-      progressBarContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:4px;z-index:9999;';
-
-      progressBar = document.createElement('div');
-      progressBar.style.cssText = 'height:100%;width:0;transition:width 0.2s;';
-
-      const mainColor = getComputedStyle(document.documentElement).getPropertyValue('--main-color').trim() || '#ff0000';
-      progressBar.style.backgroundColor = mainColor;
-
-      progressBarContainer.appendChild(progressBar);
-      document.body.appendChild(progressBarContainer);
-    }
-
-    // Set up progress tracking
-    xhr.upload.onprogress = function (event) {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-
-        // Update the progress bar if showprogress is enabled
-        if (options.showprogress && progressBar) {
-          progressBar.style.width = percentComplete + '%';
-        }
-
-        // Dispatch a custom event that code can listen for
-        const progressEvent = new CustomEvent('http:uploadProgress', {
-          detail: {
-            urlPath,
-            percentComplete,
-            loaded: event.loaded,
-            total: event.total
-          }
-        });
-        document.dispatchEvent(progressEvent);
-      }
-    };
-
-    // Return a promise for promise-based usage
-    return new Promise((resolve, reject) => {
-      xhr.open('POST', urlPath, true);
-
-      // Set headers
-      Object.keys(headers).forEach(key => {
-        xhr.setRequestHeader(key, headers[key]);
-      });
-
-      xhr.onload = function () {
-        // Remove progress bar when complete
-        if (options.showprogress && progressBarContainer) {
-          setTimeout(() => {
-            document.body.removeChild(progressBarContainer);
-          }, 500);
-        }
-
-        let response = {};
-
-        try{
-          response = xhr.responseText ? JSON.parse(xhr.responseText) : null;
-        } catch (e) {
-          console.error('Error in xhr.responseText:', xhr.responseText);
-        }
-
-        refreshUI();
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          // Success - call callback if provided and resolve promise
-          if (typeof callback === 'function') callback(null, response);
-          resolve(response);
-        } else {
-          // Error - call callback with error if provided and reject promise
-          const error = new Error(`Request failed with status ${xhr.status}`);
-          error.response = response;
-          if (typeof callback === 'function') callback(error);
-          reject(error);
-        }
-      };
-
-      xhr.onerror = function () {
-        // Remove progress bar on error
-        if (options.showprogress && progressBarContainer) {
-          document.body.removeChild(progressBarContainer);
-        }
-        const error = new Error('Network error occurred');
-        if (typeof callback === 'function') callback(error);
-        reject(error);
-      };
-      xhr.send(formData);
-    });
+    return sendFormData(urlPath, formData, headers, options, callback);
   }
   // allow others to listen to upload progress
   http.onUploadProgress = function (urlPath, callback) {
@@ -464,6 +373,112 @@ export default function (options, lightBind) {
         document.removeEventListener('http:uploadProgress', handler);
       };
   };
+
+  // -------------------------------------------------------------------------
+  // Shared XHR sender for FormData (used by postFile and postFiles)
+  // -------------------------------------------------------------------------
+  function sendFormData (urlPath, formData, headers, options, callback) {
+    options = options || {};
+    let request = { method: 'POST', url: urlPath, headers: headers || {} };
+    if (typeof config.processRequest === 'function') request = config.processRequest(request);
+    urlPath = request.url;
+
+    let progressBarContainer, progressBar;
+    if (options.showprogress !== false) {
+      progressBarContainer = document.createElement('div');
+      progressBarContainer.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:4px;z-index:9999;';
+      progressBar = document.createElement('div');
+      progressBar.style.cssText = 'height:100%;width:0;transition:width 0.2s;';
+      const mainColor = getComputedStyle(document.documentElement).getPropertyValue('--main-color').trim() || '#14bbbb';
+      progressBar.style.backgroundColor = mainColor;
+      progressBarContainer.appendChild(progressBar);
+      document.body.appendChild(progressBarContainer);
+    }
+
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.onprogress = function (event) {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          if (progressBar) progressBar.style.width = percentComplete + '%';
+          document.dispatchEvent(new CustomEvent('http:uploadProgress', {
+            detail: { urlPath, percentComplete, loaded: event.loaded, total: event.total }
+          }));
+        }
+      };
+
+      xhr.open('POST', urlPath, true);
+      Object.keys(request.headers).forEach(key => xhr.setRequestHeader(key, request.headers[key]));
+
+      xhr.onload = function () {
+        if (progressBarContainer) setTimeout(() => document.body.removeChild(progressBarContainer), 500);
+        let response = {};
+        try { response = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch (e) {}
+        refreshUI();
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (typeof callback === 'function') callback(null, response);
+          resolve(response);
+        } else {
+          const error = new Error(`Request failed with status ${xhr.status}`);
+          error.response = response;
+          if (typeof callback === 'function') callback(error);
+          reject(error);
+        }
+      };
+
+      xhr.onerror = function () {
+        if (progressBarContainer) document.body.removeChild(progressBarContainer);
+        const error = new Error('Network error occurred');
+        if (typeof callback === 'function') callback(error);
+        reject(error);
+      };
+
+      xhr.send(formData);
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // new function
+  // postFiles – upload multiple files with a shared JSON descriptor
+  //
+  // Usage:
+  //   http.postFiles('file', [
+  //     { blob, filename: 'cover.jpg', mimetype: 'image/jpeg' },
+  //     { blob: audioBlob, filename: 'song.mp3', mimetype: 'audio/mpeg', title: 'My Song' }
+  //   ], { order_id, item_id, slot, side });
+  //
+  // FormData structure sent to server:
+  //   json  → Blob: { data: {...}, files: [{ filename, mimetype, ...meta }] }
+  //   file  → Blob 1  (same index as files[0])
+  //   file  → Blob 2  (same index as files[1])
+  //   ...
+  // -------------------------------------------------------------------------
+  function postFiles (urlPath, files, data, callbackOrOptions, callback) {
+    let options = { showprogress: true };
+    if (typeof callbackOrOptions === 'function') {
+      callback = callbackOrOptions;
+    } else if (typeof callbackOrOptions === 'object') {
+      options = callbackOrOptions;
+    }
+
+    urlPath = http.getApiUrl(urlPath);
+
+    // Normalise files – accept single Blob or array of { blob, filename, mimetype, ...meta }
+    if (!Array.isArray(files)) files = [{ blob: files }];
+    files = files.map(f => (f instanceof Blob) ? { blob: f } : f);
+
+    const descriptor = {
+      data:  data || {},
+      files: files.map(({ blob, ...meta }) => meta)  // strip blob, keep meta
+    };
+
+    const formData = new FormData();
+    formData.append('json', new Blob([JSON.stringify(descriptor)], { type: 'application/json' }), 'descriptor.json');
+    files.forEach(f => formData.append('file', f.blob, f.filename || 'file'));
+
+    return sendFormData(urlPath, formData, {}, options, callback);
+  }
 
   function sanitizeFilenameForHTTP(filename) {
     // Preserve the file extension
