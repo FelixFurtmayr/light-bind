@@ -142,6 +142,7 @@ export function createExpressionHandler(lightBind) {
       return func(scope);
     } catch (error) {
       log('error', `Error evaluating expression '${expression}':`, error);
+      console.error(`Error evaluating expression '${expression}':`, error);
       return '';
     }
   }
@@ -168,6 +169,7 @@ export function createExpressionHandler(lightBind) {
             return true;
           } catch (err) {
             log('error', `Error calling function ${funcName}: ${err.message}`);
+            console.error(`Error calling function ${funcName}:`, err);
           }
         }
       }
@@ -202,6 +204,7 @@ export function createExpressionHandler(lightBind) {
       return hasChanges || true;
     } catch (error) {
       log('error', `Error parsing event handler '${expression}':`, error);
+      console.error(`Error parsing event handler '${expression}':`, error);
       return false;
     }
   }
@@ -276,6 +279,7 @@ export function createExpressionHandler(lightBind) {
       return result;
     } catch (error) {
       log('error', `Error parsing attribute bindings '${expression}':`, error);
+      console.error(`Error parsing attribute bindings '${expression}':`, error);
       return [];
     }
   }
