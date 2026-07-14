@@ -65,16 +65,65 @@ export function deepClone(value) {
   return result;
 }
 
-export function getNestedProperty(obj, path) {
-  try {
-    const parts = path.split('.');
-    let value = obj;
-    
-    for (const part of parts) {
-      if (value === null || value === undefined) return undefined;
-      value = value[part];
+// Tokenizes a path like "invoice[f.key]" or "items[0].value" into segments.
+// Bracket content is marked dynamic: true, since it may be a literal index/key
+// or an expression that needs to be evaluated against the scope (e.g. "f.key").
+export function parsePropertyPath(path) {
+  const segments = [];
+  let current = '';
+  let i = 0;
+
+  while (i < path.length) {
+    const char = path[i];
+
+    if (char === '.') {
+      if (current) { segments.push({ key: current, dynamic: false }); current = ''; }
+      i++;
+    } else if (char === '[') {
+      if (current) { segments.push({ key: current, dynamic: false }); current = ''; }
+      let depth = 1;
+      let inner = '';
+      i++;
+      while (i < path.length && depth > 0) {
+        if (path[i] === '[') depth++;
+        else if (path[i] === ']') { depth--; if (depth === 0) break; }
+        inner += path[i];
+        i++;
+      }
+      segments.push({ key: inner, dynamic: true });
+      i++; // skip closing ']'
+    } else {
+      current += char;
+      i++;
     }
-    
+  }
+
+  if (current) segments.push({ key: current, dynamic: false });
+  return segments;
+}
+
+// Resolves a single dynamic segment to a concrete key: numeric literal,
+// quoted string literal, or (if evaluateFn given) an evaluated expression.
+export function resolvePathKey(segment, root, evaluateFn) {
+  if (!segment.dynamic) return segment.key;
+  const key = segment.key.trim();
+  if (/^\d+$/.test(key)) return Number(key);
+  if (/^(['"]).*\1$/.test(key)) return key.slice(1, -1);
+  if (evaluateFn) return evaluateFn(key, root);
+  return key;
+}
+
+export function getNestedProperty(obj, path, evaluateFn) {
+  try {
+    const segments = parsePropertyPath(path);
+    let value = obj;
+
+    for (const segment of segments) {
+      if (value === null || value === undefined) return undefined;
+      const key = resolvePathKey(segment, obj, evaluateFn);
+      value = value[key];
+    }
+
     return value;
   } catch (error) {
     console.error(`Error getting nested property ${path}:`, error);

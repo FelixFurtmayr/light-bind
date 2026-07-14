@@ -18,9 +18,7 @@ Now visit: http://localhost:8000/example.html
 - Reactive Data Binding, Component System
 
 # Todo
-- debugging:
-   - make html parser more robust for dynamic attrs like form[item.id]
-   - debugging: error, if problem within main function crashes, because currently nothing happens
+- debugging errors, if problem within main function crashes, because currently nothing happens
 - performance updates: initial load + repeat (compile the html directly)
 
 ## low prio

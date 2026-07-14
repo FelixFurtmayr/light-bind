@@ -5,7 +5,7 @@ import { createDigestHandler } from './core_digest.js';
 import { createExpressionHandler } from './core_expressions.js';
 import { createBindingPathFinder } from './core_find_bindings.js';
 import { getValue } from './core_inputs.js';
-import { copyToClipboard, deepClone, getNestedProperty, isEqual, log as utilLog } from './core_utils.js';
+import { copyToClipboard, deepClone, getNestedProperty, isEqual, parsePropertyPath, resolvePathKey, log as utilLog } from './core_utils.js';
 
 // Import modules
 import createDialogHandler from './dialog.js';
@@ -94,6 +94,10 @@ export function createLightBind(options = {}) {
     createDigestHandler(instance)
   );
   
+  // Override getNestedProperty so dynamic bracket keys (e.g. invoice[f.key])
+  // are evaluated against the scope instead of treated as literal property names
+  instance.getNestedProperty = (obj, path) => getNestedProperty(obj, path, instance.evaluateExpression);
+
   // Create Virtual DOM as part of the instance
   instance.virtualDOM = createVirtualDOM(instance);
   
@@ -885,18 +889,20 @@ export function createLightBind(options = {}) {
   // Move setNestedProperty here from utils and add watcher triggering
   function setNestedProperty(obj, path, value) {
     try {
-      const parts = path.split('.');
-      const lastPart = parts.pop();
+      const segments = parsePropertyPath(path);
+      const lastSegment = segments.pop();
       let current = obj;
       
-      for (const part of parts) {
-        if (current[part] === undefined || current[part] === null) {
-          current[part] = {};
+      for (const segment of segments) {
+        const key = resolvePathKey(segment, obj, instance.evaluateExpression);
+        if (current[key] === undefined || current[key] === null) {
+          current[key] = {};
         }
-        current = current[part];
+        current = current[key];
       }
       
-      current[lastPart] = value;
+      const lastKey = resolvePathKey(lastSegment, obj, instance.evaluateExpression);
+      current[lastKey] = value;
       
       // Find component that owns this scope and trigger watchers
       const component = instance.findComponentForScope(obj);
