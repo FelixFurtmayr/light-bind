@@ -1,4 +1,4 @@
-import { getFormElementState, isFormElement, shouldUpdateFormElement, updateFormBinding } from './core_inputs.js';
+import { isFormElement } from './core_inputs.js';
 import { VirtualNode } from './core_virtual_node.js';
 
 export function createVirtualDOM(lightBind) {
@@ -31,42 +31,13 @@ export function createVirtualDOM(lightBind) {
     return vNode;
   };
   
-  vdom.updateComponent = function(component) {
-    if (!component) return;
-    
-    component.element.querySelectorAll('input, select, textarea').forEach(elem => {
-      let vNode = vdom.nodeMap.get(elem);
-      if (!vNode) {
-        vNode = VirtualNode.create({ element: elem, component, scope: component.scope });
-        vdom.nodeMap.set(elem, vNode);
-      }
-      
-      const oldValue = vNode.value || {};
-      const newValue = getFormElementState(elem);
-      
-      if (!lightBind.isEqual(oldValue, newValue)) {
-        vNode.value = newValue;
-        vNode.isDirty = true;
-      }
-    });
-  };
   
   vdom.applyChanges = function() {
     // Process component form elements
-    vdom.componentMap.forEach((rootNode, component) => {
-      if (!component?.element) return;
-      
-      component.element.querySelectorAll('input, select, textarea').forEach(element => {
-        const node = vdom.nodeMap.get(element);
-        if (node?.isDirty) {
-          VirtualNode.applyToDom(node);
-          
-          if (node.value && node.component && shouldUpdateFormElement(element, node.component)) {
-            updateFormBinding(element, node.component.scope);
-          }
-        }
-      });
-    });
+    // vdom.componentMap.forEach((rootNode, component) => {
+    //   if (!component?.element) return;
+
+    // });
     
     // Process text nodes
     vdom.textNodeMap.forEach((vNode, textNode) => {

@@ -147,20 +147,12 @@ export function createDigestHandler(lightBind) {
       const startTime = performance.now();
       
       if (rootComponent) {
-        // Update the virtual DOM tree for this component
-        lightBind.virtualDOM.updateComponent(rootComponent);
-        
         // Run legacy watchers for compatibility
         const results = updateComponentTree(rootComponent);
         
-        // Update parent if changes detected
-        if (results.changesDetected > 0 && rootComponent.parent) {
-          lightBind.virtualDOM.updateComponent(rootComponent.parent);
-        }
       } else {
         // Global update for all components
         lightBind.components.forEach(component => {
-          lightBind.virtualDOM.updateComponent(component);
           updateComponent(component);
         });
       }
