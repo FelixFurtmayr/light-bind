@@ -797,46 +797,6 @@ export function createLightBind(options = {}) {
     return component;
   }
   
-  // Updated digest function focusing on form elements
-  function digest(rootComponent = null) {
-    if (digestScheduled) return;
-    
-    digestScheduled = true;
-    
-    queueMicrotask(() => {
-      const startTime = performance.now();
-      
-      if (rootComponent) {
-        // Update the virtual DOM for form elements
-        instance.virtualDOM.updateComponent(rootComponent);
-        
-        // Run watchers (original behavior)
-        const results = instance.updateComponentTree(rootComponent);
-        
-        // If parent exists and changes were detected
-        if (rootComponent.parent && results.changesDetected > 0) {
-          instance.virtualDOM.updateComponent(rootComponent.parent);
-        }
-      } else {
-        // Global update for all components
-        instance.components.forEach(component => {
-          instance.virtualDOM.updateComponent(component);
-          instance.updateComponent(component);
-        });
-      }
-      
-      // Apply virtual DOM changes to real DOM
-      instance.virtualDOM.applyChanges();
-      
-      const duration = (performance.now() - startTime).toFixed(2);
-      log('digest', `Digest cycle complete in ${duration}ms`);
-      
-      digestScheduled = false;
-    });
-  }
-  
-  // Override the digest method
-  instance.digest = digest;
   
   // Add helper functions at the end
   function triggerPropertyWatchers(component, propertyPath) {
