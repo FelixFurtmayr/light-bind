@@ -1,5 +1,7 @@
 # LightBind Directives
 
+Attribute directives that accept key-value mappings (`bind-attr`, `bind-style`, `bind-class`) use JS object notation. Curly braces are optional: `bind-attr="{ src: url }"` and `bind-attr="src: url"` are equivalent.
+
 ## bind
 
 ```html
@@ -21,7 +23,8 @@
 <!-- Select from a list of objects -->
 <select bind="selectedOption">
   <option bind-repeat="opt in options" value="{{opt.value}}">{{opt.label}}</option>
-</select>```
+</select>
+```
 
 ## bind-if
 
@@ -112,7 +115,7 @@ To replace the array use `scope.$render({ items: newItems })` or `scope.items = 
 <div bind-style="{ color: textColor }">Colored Text</div>
 
 <!-- Multiple style properties -->
-<div bind-style="{ 
+<div bind-style="{
   backgroundColor: bgColor,
   fontSize: fontSize + 'px',
   fontWeight: isBold ? 'bold' : 'normal'

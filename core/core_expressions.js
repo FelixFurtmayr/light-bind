@@ -285,21 +285,22 @@ export function createExpressionHandler(lightBind) {
   }
 
   function parseComplexExpression(expression) {
-    const ternaryInfo = hasTernaryOperator(expression);
-    const hasObjectNotation = /\w+\s*:/.test(expression);
-    
-    if (ternaryInfo.hasTernary) {
-      return {
-        type: 'complex',
-        expression: expression.trim(),
-        sections: ternaryInfo.sections
-      };
-    } 
+    expression = expression.replace(/^\s*\{/, '').replace(/\}\s*$/, '');
+    const hasObjectNotation = /^\s*\w+\s*:/.test(expression);
     
     if (hasObjectNotation) {
       return {
         type: 'object',
         pairs: parseAttributeBindings(expression)
+      };
+    }
+    
+    const ternaryInfo = hasTernaryOperator(expression);
+    if (ternaryInfo.hasTernary) {
+      return {
+        type: 'complex',
+        expression: expression.trim(),
+        sections: ternaryInfo.sections
       };
     }
     
