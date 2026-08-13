@@ -18,6 +18,7 @@ Now visit: http://localhost:8000/example.html
 - Reactive Data Binding, Component System
 
 # Todo
+- outsource event handling into extra file; make upload and drag/drop directive to events for more unity
 - debugging errors, if problem within main function crashes, because currently nothing happens
 - performance updates: initial load + repeat (compile the html directly)
 

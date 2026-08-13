@@ -191,6 +191,33 @@ All Events:
 - on-mouseout
 - on-mouseenter
 - on-mouseleave
+- on-touchstart
+- on-touchmove
+- on-touchend
+- on-touchcancel
+- on-swipe-left
+- on-swipe-right
+
+
+### Swipe Gestures
+
+`on-swipe-left` and `on-swipe-right` are composite events (touchstart + touchmove + touchend). They fire when the user swipes past a threshold (default 40px).
+
+```html
+<div on-swipe-left="nextSlide()" on-swipe-right="prevSlide()">
+  Swipeable content
+</div>
+```
+
+Optional attributes:
+- `swipe-animate` — the element follows the finger via translateX during the swipe and snaps back on release
+- `swipe-threshold="60"` — custom distance threshold in pixels (default: 40)
+
+```html
+<div on-swipe-left="next()" on-swipe-right="prev()" swipe-animate swipe-threshold="60">
+  Animated swipe carousel
+</div>
+```
 
 
 ## bind-drag and bind-drop

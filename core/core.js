@@ -61,7 +61,16 @@ export function createLightBind(options = {}) {
     'on-mouseover': 'mouseover',
     'on-mouseout': 'mouseout',
     'on-mouseenter': 'mouseenter',
-    'on-mouseleave': 'mouseleave'
+    'on-mouseleave': 'mouseleave',
+    'on-touchstart': 'touchstart',
+    'on-touchmove': 'touchmove',
+    'on-touchend': 'touchend',
+    'on-touchcancel': 'touchcancel'
+  };
+
+  const swipeDirections = {
+    'on-swipe-left': 'left',
+    'on-swipe-right': 'right'
   };
   
   // Create the instance object with basic properties
@@ -355,6 +364,63 @@ export function createLightBind(options = {}) {
     }
   }
   
+  function setupSwipeBinding(element, component) {
+    if (!component.nodeBindings.has(element)) component.nodeBindings.set(element, {});
+    const nodeBindings = component.nodeBindings.get(element);
+    if (nodeBindings._swipeBound) return;
+    nodeBindings._swipeBound = true;
+
+    const exprLeft = element.getAttribute('on-swipe-left');
+    const exprRight = element.getAttribute('on-swipe-right');
+    const animate = element.hasAttribute('swipe-animate');
+    const threshold = parseInt(element.getAttribute('swipe-threshold'), 10) || 40;
+
+    let startX = 0;
+    let tracking = false;
+
+    element.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      tracking = true;
+      if (animate) element.style.transition = 'none';
+    }, { passive: true });
+
+    if (animate) {
+      element.addEventListener('touchmove', (e) => {
+        if (!tracking) return;
+        const dx = e.touches[0].clientX - startX;
+        element.style.transform = 'translateX(' + dx + 'px)';
+      }, { passive: true });
+    }
+
+    element.addEventListener('touchend', (e) => {
+      if (!tracking) return;
+      tracking = false;
+      const dx = e.changedTouches[0].clientX - startX;
+
+      if (animate) {
+        element.style.transition = 'transform 0.25s ease';
+        element.style.transform = '';
+      }
+
+      if (Math.abs(dx) < threshold) return;
+
+      const ownerComponent = findDirectComponentForElement(element) || component;
+      const expr = dx < 0 ? exprLeft : exprRight;
+      if (expr) {
+        instance.parseEventHandler(expr, ownerComponent.scope, e);
+        instance.digest(ownerComponent);
+      }
+    }, { passive: true });
+
+    element.addEventListener('touchcancel', () => {
+      tracking = false;
+      if (animate) {
+        element.style.transition = 'transform 0.25s ease';
+        element.style.transform = '';
+      }
+    }, { passive: true });
+  }
+
   function processElementAndChildren(element, component, skipChildren = false) {
     // Skip if already processed
     if (component.nodeBindings.has(element) && component.nodeBindings.get(element).processed) {
@@ -425,7 +491,10 @@ export function createLightBind(options = {}) {
       // Already processed above
       if (name === 'bind-repeat') return;
       
-      if (eventMap[name]) {
+      if (swipeDirections[name]) {
+        setupSwipeBinding(element, component);
+      }
+      else if (eventMap[name]) {
         setupEventBinding(element, eventMap[name], value, component);
       } 
       else if (instance.directives[name]) {
