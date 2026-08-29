@@ -139,15 +139,11 @@ const LightBindNotification = (function () {
 
   function messageHelper(type){
     return function (...args) {
-      let message;
-      if (args.length > 1) {
-        message = args.join(' ');
-      } else {
-        message = args[0];
-      }
-      if (typeof message === 'string') message = { content: message };
-      message.type = type;
-      return showNotification(message);
+      var raw = args.map(function(a){
+        if (typeof a === 'string') return a;
+        return a.message || a.error || JSON.stringify(a);
+      }).join(' ');
+      return showNotification({ content: raw, type: type });
     }
   }
 
