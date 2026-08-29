@@ -38,7 +38,7 @@ class BindUploadDirective extends BaseDirective {
           pointer-events: none;
         }
 
-        .bind-upload-zone .file-select {
+        .bind-upload-zone.default-style .file-select {
           color: #007bff;
           text-decoration: underline;
           cursor: pointer;
