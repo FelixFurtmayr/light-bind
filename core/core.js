@@ -4,7 +4,7 @@ LightBind Core with enhanced $parent and $elem references and Virtual DOM integr
 import { createDigestHandler } from './core_digest.js';
 import { createExpressionHandler } from './core_expressions.js';
 import { createBindingPathFinder } from './core_find_bindings.js';
-import { getValue } from './core_inputs.js';
+import { getValue, isFormElement } from './core_inputs.js';
 import { copyToClipboard, deepClone, getNestedProperty, isEqual, parsePropertyPath, resolvePathKey, log as utilLog } from './core_utils.js';
 
 // Import modules
@@ -289,46 +289,18 @@ export function createLightBind(options = {}) {
     }
 
     const nodeBindings = component.nodeBindings.get(element);
-    const eventKey = `event_${eventName}_${expression}`;
+    const domEvent = (isFormElement(element) && eventName === 'change' && element.hasAttribute('bind')) ? 'input' : eventName;
+    const eventKey = `event_${domEvent}_${expression}`;
 
     if (nodeBindings[eventKey]) return;
 
-    const isInputControl = (element.tagName === 'INPUT' || element.tagName === 'SELECT' || element.tagName === 'TEXTAREA');
     const elementOwnerComponent = findDirectComponentForElement(element);
 
-    // Debounce setup — works for any element, any event
     const debounceAttr = element.getAttribute('debounce');
     const debounceDelay = debounceAttr !== null ? (parseInt(debounceAttr, 10) || 2000) : 0;
     let debounceTimer = null;
 
-    // Two-way binding setup — if element has a bind attribute
-    const bindExpression = element.getAttribute('bind');
-    const isTwoWayBinding = isInputControl && bindExpression;
-
     function applyEvent(event) {
-      // Two-way binding: DOM → Scope
-      if (isTwoWayBinding) {
-        const newVal = getValue(element);
-
-        // Update virtual DOM node
-        const vNode = instance.virtualDOM.nodeMap.get(element);
-        if (vNode) {
-          vNode.value = {
-            type: element.type || 'text',
-            value: newVal,
-            checked: element.type === 'checkbox' || element.type === 'radio' ? element.checked : undefined
-          };
-          vNode.isDirty = true;
-        }
-
-        // Skip if value hasn't changed
-        if (newVal === nodeBindings[`lastValue_${eventName}`]) return;
-        nodeBindings[`lastValue_${eventName}`] = newVal;
-
-        instance.setNestedProperty((elementOwnerComponent || component).scope, bindExpression, newVal);
-      }
-
-      // Execute the on-* expression if present
       if (expression) {
         const componentScope = (elementOwnerComponent || component).scope;
         componentScope.$event = event;
@@ -347,23 +319,10 @@ export function createLightBind(options = {}) {
       }
     };
 
-    if (isInputControl && (eventName === 'input' || eventName === 'change')) {
-      nodeBindings[`lastValue_${eventName}`] = getValue(element);
-    }
-
-    element.addEventListener(eventName, handleEvent);
+    element.addEventListener(domEvent, handleEvent);
     nodeBindings[eventKey] = handleEvent;
-
-    // special case: listen for input events also when there is a change event
-    if (eventName === 'change' && isTwoWayBinding) {
-      const inputKey = `event_input_null`;
-      if (!nodeBindings[inputKey]) {
-        element.addEventListener('input', handleEvent);
-        nodeBindings[inputKey] = handleEvent;
-      }
-    }
   }
-  
+
   function setupSwipeBinding(element, component) {
     if (!component.nodeBindings.has(element)) component.nodeBindings.set(element, {});
     const nodeBindings = component.nodeBindings.get(element);
@@ -438,7 +397,7 @@ export function createLightBind(options = {}) {
     component.bindings = component.bindings || [];
     
     // Process form elements for virtual DOM tracking
-    if (element.tagName === 'INPUT' || element.tagName === 'SELECT' || element.tagName === 'TEXTAREA') {
+    if (isFormElement(element)) {
       instance.virtualDOM.createFromDOM(element, component);
     }
     

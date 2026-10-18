@@ -1,17 +1,15 @@
-import { getEventType, getValue, setValue } from '../core/core_inputs.js';
+import { getValue, isFormElement, setValue } from '../core/core_inputs.js';
 import { BaseDirective } from './base-directive.js';
 
 class BindDirective extends BaseDirective {
   process(element, expression, component) {
-    const isInput = element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.tagName === 'SELECT';
-
     let self = this;
 
     function log(){
       self.log.apply(self, arguments);
     }
 
-    if (!isInput) {
+    if (!isFormElement(element)) {
       log('warn', `Two-way binding can only be applied to input elements: ${element.tagName}`);
       return { success: false };
     }
@@ -37,10 +35,8 @@ class BindDirective extends BaseDirective {
 
 
     // 2. Setup DOM → Scope (Event-Listener)
-    const eventType = getEventType(element);   
-    element.addEventListener(eventType, (event) => {
-      const newVal = getValue(element);
-      self.lightBind.setNestedProperty(component.scope, expression, newVal);
+    element.addEventListener('input', () => {
+      self.lightBind.setNestedProperty(component.scope, expression, getValue(element));
       self.lightBind.digest(component);
     });
 
