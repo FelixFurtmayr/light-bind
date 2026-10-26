@@ -3,12 +3,12 @@
 ## HTTP Client
 
 ```javascript
-// Configuration
-http.init({
+// Configuration: options are passed to the constructor and handed through to http
+new LightBind({
   apiPath: '/api/',
   timeout: 30000,
   autoRefresh: true,
-  
+
   processRequest: (request) => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -16,12 +16,19 @@ http.init({
     }
     return request;
   },
-  
+
   handleResponseStatus: {
     401: () => window.location.href = '/login',
     403: () => notification.error('Permission denied')
-  }
-});
+  },
+
+  // shortcuts
+  setHeaderTokenFromStorage: true, // or the storage key name; sends the token in a header with that name
+  logoutOnDeniedPage: 'login.html' // true or login url: on 401/403 remove token and redirect
+}).setGlobals().start();
+
+// read the active configuration
+http.getConfig();
 
 // Making Requests
 http.get('users').then(users => {
